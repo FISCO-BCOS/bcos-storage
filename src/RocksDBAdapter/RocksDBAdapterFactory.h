@@ -14,13 +14,13 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file RocksDBStorageFactory.h
+/** @file RocksDBAdapterFactory.h
  *  @author xingqiangbai
  *  @date 20210423
  */
 #pragma once
 
-#include "RocksDBStorage.h"
+#include "RocksDBAdapter.h"
 #include "rocksdb/options.h"
 
 namespace rocksdb
@@ -31,17 +31,17 @@ namespace bcos
 {
 namespace storage
 {
-class RocksDBStorageFactory
+class RocksDBAdapterFactory
 {
 public:
-    RocksDBStorageFactory(const std::string& _dbPath)
-      : m_DBPath(_dbPath)
-    {}
-    virtual ~RocksDBStorageFactory() {}
-    RocksDBStorage::Ptr createStorage(const std::string& _dbName, bool _createIfMissing = true);
+    explicit RocksDBAdapterFactory(const std::string& _dbPath) : m_DBPath(_dbPath) {}
+    virtual ~RocksDBAdapterFactory() {}
+    RocksDBAdapter::Ptr createAdapter(const std::string& _dbName, int _perfixLength = 0);
+    rocksdb::DB* createRocksDB(
+        const std::string& _dbName, int _perfixLength = 0, bool _createIfMissing = true);
 
 private:
     const std::string m_DBPath;
 };
 }  // namespace storage
-}  // namespace dev
+}  // namespace bcos

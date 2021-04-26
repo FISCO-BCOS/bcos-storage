@@ -14,13 +14,13 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file RocksDBStorageFactory.h
+/** @file RocksDBAdapterFactory.h
  *  @author xingqiangbai
  *  @date 20180423
  */
 
-#include "RocksDBStorageFactory.h"
-#include "RocksDBStorage.h"
+#include "RocksDBAdapter.h"
+#include "RocksDBAdapterFactory.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/db.h"
 #include "rocksdb/slice_transform.h"
@@ -32,8 +32,8 @@ namespace bcos
 {
 namespace storage
 {
-
-RocksDBStorage::Ptr RocksDBStorageFactory::createStorage(const std::string& _dbName, bool _createIfMissing)
+rocksdb::DB* RocksDBAdapterFactory::createRocksDB(
+    const std::string& _dbName, int _perfixLength, bool _createIfMissing)
 {
     auto dbName = m_DBPath + "/" + _dbName;
     if (!_createIfMissing && !boost::filesystem::exists(dbName))
@@ -45,12 +45,27 @@ RocksDBStorage::Ptr RocksDBStorageFactory::createStorage(const std::string& _dbN
     options.create_if_missing = true;
     options.max_open_files = 200;
     options.compression = rocksdb::kSnappyCompression;
-    // <---- Enable some features supporting prefix extraction
-    options.prefix_extractor.reset(NewCappedPrefixTransform(RocksDBStorage::TABLE_PERFIX_LENGTH));
+    if (_perfixLength > 0)
+    {  // supporting prefix extraction
+        options.prefix_extractor.reset(NewCappedPrefixTransform(_perfixLength));
+    }
 
     DB* db;
     Status s = DB::Open(options, dbName, &db);
-    std::shared_ptr<RocksDBStorage> rocksdbStorage = std::make_shared<RocksDBStorage>(db);
+    if (!s.ok())
+    {
+        // TODO: output some log
+        return nullptr;
+    }
+    return db;
+}
+
+
+RocksDBAdapter::Ptr RocksDBAdapterFactory::createAdapter(
+    const std::string& _dbName, int _perfixLength)
+{
+    auto db = createRocksDB(_dbName, _perfixLength);
+    std::shared_ptr<RocksDBAdapter> rocksdbStorage = std::make_shared<RocksDBAdapter>(db);
     return rocksdbStorage;
 }
 }  // namespace storage

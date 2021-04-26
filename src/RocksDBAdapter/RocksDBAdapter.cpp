@@ -14,12 +14,12 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file RocksDBStorage.cpp
+/** @file RocksDBAdapter.cpp
  *  @author xingqiangbai
  *  @date 20180423
  */
 
-#include "RocksDBStorage.h"
+#include "RocksDBAdapter.h"
 #include "boost/archive/binary_iarchive.hpp"
 #include "boost/archive/binary_oarchive.hpp"
 #include "boost/iostreams/device/back_inserter.hpp"
@@ -48,13 +48,13 @@ const char* const CURRENT_TABLE_ID = "tableID";
 const string TABLE_PERFIX = "t";
 const char* const TABLE_KEY_PERFIX = "k";
 
-RocksDBStorage::RocksDBStorage(rocksdb::DB* _db) : m_db(_db)
+RocksDBAdapter::RocksDBAdapter(rocksdb::DB* _db) : m_db(_db)
 {
     auto s = m_db->CreateColumnFamily(ColumnFamilyOptions(), METADATA_COLUMN_NAME, &m_metadataCF);
     assert(s.ok());
 }
 
-RocksDBStorage::~RocksDBStorage()
+RocksDBAdapter::~RocksDBAdapter()
 {
     if (m_metadataCF)
     {
@@ -63,7 +63,7 @@ RocksDBStorage::~RocksDBStorage()
     }
 }
 
-std::pair<std::string, bool> RocksDBStorage::getTablePerfix(const std::string& _tableName) const
+std::pair<std::string, bool> RocksDBAdapter::getTablePerfix(const std::string& _tableName) const
 {
     // perfix+tableName store tableID, store tableID in meta column Family
     // tableID use 8B
@@ -94,7 +94,7 @@ std::pair<std::string, bool> RocksDBStorage::getTablePerfix(const std::string& _
     return std::make_pair(value, true);
 }
 
-int64_t RocksDBStorage::getNextTableID()
+int64_t RocksDBAdapter::getNextTableID()
 {
     if (m_tableID.load() == 0)
     {  // get table Id from database
@@ -114,7 +114,7 @@ int64_t RocksDBStorage::getNextTableID()
     return m_tableID.fetch_add(1);
 }
 
-std::vector<std::string> RocksDBStorage::getPrimaryKeys(
+std::vector<std::string> RocksDBAdapter::getPrimaryKeys(
     std::shared_ptr<TableInfo> _tableInfo, std::shared_ptr<Condition> _condition) const
 {
     vector<string> ret;
@@ -141,7 +141,7 @@ std::vector<std::string> RocksDBStorage::getPrimaryKeys(
     return ret;
 }
 
-std::shared_ptr<Entry> RocksDBStorage::getRow(
+std::shared_ptr<Entry> RocksDBAdapter::getRow(
     std::shared_ptr<TableInfo>& _tableInfo, const std::string_view& _key)
 {
     // get TableID according tableName,
@@ -168,7 +168,7 @@ std::shared_ptr<Entry> RocksDBStorage::getRow(
     return vectorToEntry(_tableInfo, res);
 }
 
-std::map<std::string, std::shared_ptr<Entry>> RocksDBStorage::getRows(
+std::map<std::string, std::shared_ptr<Entry>> RocksDBAdapter::getRows(
     std::shared_ptr<TableInfo>& _tableInfo, const std::vector<std::string>& _keys)
 {
     std::map<std::string, std::shared_ptr<Entry>> ret;
@@ -210,7 +210,7 @@ std::map<std::string, std::shared_ptr<Entry>> RocksDBStorage::getRows(
     return ret;
 }
 
-size_t RocksDBStorage::commitTables(const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
+size_t RocksDBAdapter::commitTables(const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
     std::vector<std::shared_ptr<std::map<std::string, std::shared_ptr<Entry>>>>& _tableDatas)
 {
     atomic<size_t> total = 0;
