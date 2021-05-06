@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file RocksDBStorage.h
+/** @file RocksDBAdapter.h
  *  @author xingqiangbai
  *  @date 20180423
  */
@@ -35,14 +35,14 @@ namespace bcos
 {
 namespace storage
 {
-class RocksDBStorage : public AdapterInterface
+class RocksDBAdapter : public AdapterInterface
 {
 public:
     static const int TABLE_PERFIX_LENGTH = 9;  //"t" + sizeof(int64_t)
     // using CryptHandler = std::function<void(std::string const&, std::string&)>;
-    typedef std::shared_ptr<RocksDBStorage> Ptr;
-    RocksDBStorage(rocksdb::DB* _db);
-    virtual ~RocksDBStorage();
+    typedef std::shared_ptr<RocksDBAdapter> Ptr;
+    explicit RocksDBAdapter(rocksdb::DB* _db);
+    virtual ~RocksDBAdapter();
 
     std::vector<std::string> getPrimaryKeys(std::shared_ptr<TableInfo> _tableInfo,
         std::shared_ptr<Condition> _condition) const override;
@@ -53,18 +53,6 @@ public:
     size_t commitTables(const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
         std::vector<std::shared_ptr<std::map<std::string, std::shared_ptr<Entry>>>>& _tableDatas)
         override;
-
-    void asyncGetPrimaryKeys(std::shared_ptr<TableInfo>& _tableInfo,
-        std::shared_ptr<Condition> _condition,
-        std::function<void(Error, std::vector<std::string>)> _callback) const override;
-    void asyncGetRow(std::shared_ptr<TableInfo>& _tableInfo, const std::string_view& _key,
-        std::function<void(Error, std::shared_ptr<Entry>)> _callback) override;
-    void asyncGetRows(std::shared_ptr<TableInfo>& _tableInfo, const std::vector<std::string>& _keys,
-        std::function<void(Error, std::map<std::string, std::shared_ptr<Entry>>)> _callback)
-        override;
-    void asyncCommitTables(const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
-        std::vector<std::shared_ptr<std::map<std::string, std::shared_ptr<Entry>>>>& _tableDatas,
-        std::function<void(Error)> _callback) override;
 
 private:
     inline std::pair<std::string, bool> getTablePerfix(const std::string& _tableName) const;
