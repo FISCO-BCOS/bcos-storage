@@ -82,8 +82,9 @@ std::pair<std::string, bool> RocksDBAdapter::getTablePerfix(const std::string& _
     string value;
     auto status = m_db->Get(ReadOptions(), m_metadataCF, Slice(realKey), &value);
     if (!status.ok())
-    {
-        // panic
+    {  // panic
+        STORAGE_LOG(ERROR) << LOG_BADGE("RocksDBAdapter getTablePerfix failed") << LOG_DESC("table not exist")
+                           << LOG_KV("name", _tableName) << LOG_KV("message", status.ToString());
         return std::make_pair("", false);
     }
     value = perfix + value;
@@ -122,7 +123,8 @@ std::vector<std::string> RocksDBAdapter::getPrimaryKeys(
     auto perfixPair = getTablePerfix(_tableInfo->name);
     if (!perfixPair.second)
     {
-        // TODO: output some log
+        STORAGE_LOG(DEBUG) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("getPrimaryKeys failed")
+                           << LOG_KV("name", _tableInfo->name);
         return ret;
     }
     auto& tablePerfix = perfixPair.first;
@@ -134,7 +136,7 @@ std::vector<std::string> RocksDBAdapter::getPrimaryKeys(
          iter->Next())
     {
         if (_condition->isValid(string_view(iter->key().data(), iter->key().size())))
-        { // filter by condition
+        {  // filter by condition
             ret.emplace_back(iter->key().ToString());
         }
     }
@@ -147,7 +149,7 @@ std::shared_ptr<Entry> RocksDBAdapter::getRow(
     // get TableID according tableName,
     auto perfixPair = getTablePerfix(_tableInfo->name);
     if (!perfixPair.second)
-    {  // TODO: output some log
+    {
         return nullptr;
     }
     // construct the real key and get
@@ -156,7 +158,9 @@ std::shared_ptr<Entry> RocksDBAdapter::getRow(
     auto status = m_db->Get(ReadOptions(), Slice(realKey), &value);
     if (!status.ok())
     {
-        // TODO: output some log
+        STORAGE_LOG(DEBUG) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("getRow failed")
+                           << LOG_KV("name", _tableInfo->name) << LOG_KV("key", _key)
+                           << LOG_KV("message", status.ToString());
         return nullptr;
     }
     // deserialization the value to vector
@@ -179,7 +183,7 @@ std::map<std::string, std::shared_ptr<Entry>> RocksDBAdapter::getRows(
     // get TableID according tableName,
     auto perfixPair = getTablePerfix(_tableInfo->name);
     if (!perfixPair.second)
-    {  // TODO: output some log
+    {
         return ret;
     }
     auto tablePerfix = std::move(perfixPair.first);
@@ -217,6 +221,7 @@ size_t RocksDBAdapter::commitTables(const std::vector<std::shared_ptr<TableInfo>
     if (_tableInfos.size() != _tableDatas.size())
     {
         // TODO:  panic
+        STORAGE_LOG(ERROR) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("commitTables info and data size mismatch");
         return 0;
     }
     WriteBatch writeBatch;
@@ -247,6 +252,7 @@ size_t RocksDBAdapter::commitTables(const std::vector<std::shared_ptr<TableInfo>
                     auto perfixPair = getTablePerfix(tableInfo->name);
                     if (!perfixPair.second)
                     {  // TODO: panic
+                        STORAGE_LOG(ERROR) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("commitTables info and data size mismatch");
                     }
                     tablePerfix = std::move(perfixPair.first);
                 }
