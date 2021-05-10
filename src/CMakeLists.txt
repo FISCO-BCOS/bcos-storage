@@ -1,13 +1,28 @@
 
+include(GNUInstallDirs)
 file(GLOB SRC_LIST "*.cpp" "./RocksDBAdapter/*.cpp")
 file(GLOB HEADERS "*.h" "./RocksDBAdapter/*.h")
 
 hunter_add_package(rocksdb)
 find_package(RocksDB CONFIG REQUIRED)
 
-add_library(storage ${SRC_LIST} ${HEADERS})
+add_library(${STORAGE_TARGET} ${SRC_LIST} ${HEADERS})
 
 # target_link_libraries(storage PRIVATE blockverifier ethcore)
-target_link_libraries(storage PUBLIC tbb::tbb RocksDB::rocksdb)
+target_link_libraries(${STORAGE_TARGET} PUBLIC tbb::tbb RocksDB::rocksdb)
 # target_compile_options(storage PRIVATE -Wno-error)
-target_include_directories(storage PUBLIC ${include_dir})
+
+install(
+    DIRECTORY "./"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/bcos-storage"
+    FILES_MATCHING PATTERN "*.h"
+)
+
+install(
+    TARGETS ${STORAGE_TARGET}
+    EXPORT "${TARGETS_EXPORT_NAME}"
+    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+    INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/bcos-storage"
+)
