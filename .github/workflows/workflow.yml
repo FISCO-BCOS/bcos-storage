@@ -54,13 +54,13 @@ jobs:
         run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DTESTS=ON
       - name: check commit
         if: ${{ runner.os == 'Linux' && github.base_ref != 'master' && github.event_name == 'pull_request' }}
-        run: bash cmake/scripts/shell/check-commit.sh 3000 "https://api.github.com/repos/FISCO-BCOS/bcos-framework"
+        run: bash cmake/scripts/shell/check-commit.sh 3000 "https://api.github.com/repos/FISCO-BCOS/bcos-storage"
       - name: compile
         run: make -j2
-      # - name: run test
-      #   run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      - name: run test
+        run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
   ubuntu20_04_build_with_gcc:
-    name: build_with_gcc
+    name: build20_04_with_gcc
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -81,13 +81,13 @@ jobs:
             hunter-gcc-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
             hunter-gcc-v1-notest-${{ runner.temp }}-
       - name: install Ubuntu dependencies
-        run: sudo apt install -y git curl build-essential cmake ccache
+        run: sudo apt install -y git curl build-essential cmake ccache libzstd-dev
       - name: configure
         run: cmake . -DTESTS=ON
       - name: compile
         run: make -j2
-      # - name: run test
-      #   run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      - name: run test
+        run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
   ubuntu18_04_build_with_gcc:
     name: ubuntu18_04_build_with_gcc
     runs-on: ${{ matrix.os }}
@@ -112,23 +112,23 @@ jobs:
             hunter-ubuntu-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
             hunter-ubuntu-v1-notest-${{ runner.temp }}-
       - name: install Ubuntu dependencies
-        run: sudo apt install -y git curl build-essential cmake ccache lcov
+        run: sudo apt install -y git curl build-essential cmake ccache lcov libzstd-dev
       - name: configure
         run: cmake . -DTESTS=ON -DCOVERAGE=ON
       - name: compile
         run: make -j2
-      # - name: run test
-      #   run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
-      # - name: generate coverage
-      #   run: make coverage
-      # - name: upload code coverage to Codecov
-      #   uses: codecov/codecov-action@v1
-      #   with:
-      #     file: ./coverage.info
-      #     name: bcos-framework coverage
-      #     fail_ci_if_error: true
-  build_with_centos:
-    name: build_with_centos
+      - name: run test
+        run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      - name: generate coverage
+        run: make coverage
+      - name: upload code coverage to Codecov
+        uses: codecov/codecov-action@v1
+        with:
+          file: ./coverage.info
+          name: code coverage
+          fail_ci_if_error: true
+  build_centos_with_gcc:
+    name: build_centos_with_gcc
     runs-on: ubuntu-latest
     container:
       image: docker.io/centos:7
@@ -154,11 +154,11 @@ jobs:
       - name: install CentOS dependencies
         run: |
           yum install -y epel-release centos-release-scl
-          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache devtoolset-7 && source /opt/rh/devtoolset-7/enable
+          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache devtoolset-7 libzstd-devel && source /opt/rh/devtoolset-7/enable
       - name: configure and compile
         run: |
           source /opt/rh/devtoolset-7/enable
           mkdir -p build && cd build
           cmake3 .. -DTESTS=ON
           make -j2
-        # CTEST_OUTPUT_ON_FAILURE=TRUE make test
+          CTEST_OUTPUT_ON_FAILURE=TRUE make test
