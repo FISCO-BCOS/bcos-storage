@@ -21,6 +21,7 @@
 #pragma once
 
 #include "../AdapterInterface.h"
+#include <boost/lexical_cast.hpp>
 #include <atomic>
 #include <map>
 #include <shared_mutex>
@@ -61,9 +62,17 @@ private:
     inline std::shared_ptr<Entry> vectorToEntry(
         std::shared_ptr<TableInfo>& _tableInfo, std::vector<std::string>& _values) const
     {
-        if (_tableInfo->fields.size() != _values.size() - 1)
-        {
-            // TODO: panic
+        if (_tableInfo->fields.size() != _values.size() - 3)
+        {  // panic, 3 means [key, status, num]
+            STORAGE_LOG(ERROR) << LOG_BADGE("RocksDBAdapter data mismatch")
+                               << LOG_KV("name", _tableInfo->name);
+            return nullptr;
+        }
+        auto deleted = boost::lexical_cast<bool>(_values[_tableInfo->fields.size() + 1]);
+        if (deleted)
+        {  // deleted entry should not exist in rocksDB
+            STORAGE_LOG(ERROR) << LOG_BADGE("RocksDBAdapter found deleted entry in DB")
+                               << LOG_KV("name", _tableInfo->name) << LOG_KV("key", _values[0]);
             return nullptr;
         }
         auto entry = std::make_shared<Entry>();
@@ -72,6 +81,9 @@ private:
         {
             entry->setField(_tableInfo->fields[i], std::move(_values[i + 1]));
         }
+        auto number =
+            boost::lexical_cast<protocol::BlockNumber>(_values[_tableInfo->fields.size() + 2]);
+        entry->setNum(number);
         entry->setDirty(false);
         return entry;
     }

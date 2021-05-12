@@ -37,3 +37,4 @@ cmake/deps/**
 build/**
 .clang-format
 .vscode/**
+.DS_Store

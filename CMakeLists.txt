@@ -33,13 +33,13 @@ set(HUNTER_USE_CACHE_SERVERS NO CACHE STRING "Download cache from cache server" 
 set(HUNTER_CONFIGURATION_TYPES Release CACHE STRING "Build type of Hunter packages")
 # set(HUNTER_STATUS_PRINT OFF CACHE STRING "Hunter status output")
 
-# set(HUNTER_CONFIGURATION_TYPES Release CACHE STRING "Build type of Hunter packages")
 include(HunterGate)
 HunterGate(
     URL "https://github.com/FISCO-BCOS/hunter/archive/8c81ea454c0c268b257da1fe3e3f2f69bd59a67d.tar.gz"
     SHA1 "13292adf48c4c053ff2ceb7173631a296c08d1ac"
     FILEPATH "${CMAKE_SOURCE_DIR}/cmake/config.cmake"
 )
+
 # set CMP0074 to NEW to suppress warnning, https://cmake.org/cmake/help/latest/policy/CMP0074.html
 cmake_policy(VERSION 3.12)
 cmake_policy(SET CMP0074 NEW)
@@ -60,5 +60,5 @@ add_subdirectory(src)
 if (TESTS)
     enable_testing()
     set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
-    # add_subdirectory(test)
+    add_subdirectory(test)
 endif()

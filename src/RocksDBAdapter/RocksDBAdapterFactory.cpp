@@ -19,8 +19,8 @@
  *  @date 20180423
  */
 
-#include "RocksDBAdapter.h"
 #include "RocksDBAdapterFactory.h"
+#include "RocksDBAdapter.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/db.h"
 #include "rocksdb/slice_transform.h"
@@ -44,7 +44,7 @@ rocksdb::DB* RocksDBAdapterFactory::createRocksDB(
     Options options;
     options.create_if_missing = true;
     options.max_open_files = 200;
-    options.compression = rocksdb::kSnappyCompression;
+    options.compression = rocksdb::kZSTD;
     if (_perfixLength > 0)
     {  // supporting prefix extraction
         options.prefix_extractor.reset(NewCappedPrefixTransform(_perfixLength));
@@ -54,12 +54,12 @@ rocksdb::DB* RocksDBAdapterFactory::createRocksDB(
     Status s = DB::Open(options, dbName, &db);
     if (!s.ok())
     {
-        // TODO: output some log
+        STORAGE_LOG(ERROR) << LOG_BADGE("RocksDBAdapterFactory open rocksDB failed")
+                           << LOG_KV("dbName", dbName) << LOG_KV("message", s.ToString());
         return nullptr;
     }
     return db;
 }
-
 
 RocksDBAdapter::Ptr RocksDBAdapterFactory::createAdapter(
     const std::string& _dbName, int _perfixLength)

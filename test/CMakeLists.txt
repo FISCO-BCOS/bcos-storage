@@ -24,9 +24,13 @@ set(TEST_BINARY_NAME test-bcos-storage)
 config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
-target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR} ${BCOS_TEST_DIR})
+target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR}/src)
 
-hunter_add_package(wedpr-crypto)
-find_package(wedpr-crypto CONFIG QUIET REQUIRED)
 find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
-target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework ${UTILITIES_TARGET} ${CODEC_TARGET} ${PROTOCOL_TARGET} ${PBPROTOCOL_TARGET} ${TABLE_TARGET} wedpr-crypto::crypto)
+target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework ${STORAGE_TARGET} bcos-framework::utilities)
+
+# for code coverage
+if (COVERAGE)
+    include(Coverage)
+    config_coverage("'/usr*' 'boost/**'")
+endif ()
