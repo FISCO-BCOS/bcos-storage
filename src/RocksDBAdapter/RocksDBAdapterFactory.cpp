@@ -23,6 +23,7 @@
 #include "RocksDBAdapter.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/db.h"
+#include "rocksdb/options.h"
 #include "rocksdb/slice_transform.h"
 
 using namespace std;
@@ -32,14 +33,21 @@ namespace bcos
 {
 namespace storage
 {
-rocksdb::DB* RocksDBAdapterFactory::createRocksDB(
-    const std::string& _dbName, int _perfixLength, bool _createIfMissing)
+std::pair<rocksdb::DB*, std::vector<rocksdb::ColumnFamilyHandle*>>
+RocksDBAdapterFactory::createRocksDB(const std::string& _dbName, int _perfixLength,
+    bool _createIfMissing, const std::vector<std::string>& _columnFamilies)
 {
+    std::pair<rocksdb::DB*, std::vector<rocksdb::ColumnFamilyHandle*>> ret{
+        nullptr, vector<ColumnFamilyHandle*>()};
+
     auto dbName = m_DBPath + "/" + _dbName;
     if (!_createIfMissing && !boost::filesystem::exists(dbName))
     {
-        return nullptr;
+        STORAGE_LOG(ERROR) << LOG_BADGE("RocksDBAdapterFactory open rocksDB failed, path not exist")
+                           << LOG_KV("dbName", dbName);
+        return ret;
     }
+
     boost::filesystem::create_directories(dbName);
     Options options;
     options.create_if_missing = true;
@@ -49,23 +57,49 @@ rocksdb::DB* RocksDBAdapterFactory::createRocksDB(
     {  // supporting prefix extraction
         options.prefix_extractor.reset(NewCappedPrefixTransform(_perfixLength));
     }
+    std::vector<ColumnFamilyDescriptor> column_families;
+    for (auto& columnName : _columnFamilies)
+    {
+        column_families.push_back(ColumnFamilyDescriptor(columnName, ColumnFamilyOptions()));
+    }
+    std::vector<std::string> currentColumnFamilies;
+    DB::ListColumnFamilies(options, dbName, &currentColumnFamilies);
 
     DB* db;
     Status s = DB::Open(options, dbName, &db);
     if (!s.ok())
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("RocksDBAdapterFactory open rocksDB failed")
+        STORAGE_LOG(ERROR) << LOG_BADGE("open rocksDB failed")
                            << LOG_KV("dbName", dbName) << LOG_KV("message", s.ToString());
-        return nullptr;
     }
-    return db;
+    for (auto& name : _columnFamilies)
+    {
+        if (find(currentColumnFamilies.begin(), currentColumnFamilies.end(), name) ==
+            currentColumnFamilies.end())
+        {
+            ColumnFamilyHandle* cf;
+            db->CreateColumnFamily(ColumnFamilyOptions(), name, &cf);
+            db->DestroyColumnFamilyHandle(cf);
+        }
+    }
+    delete db;
+    s = DB::Open(options, dbName, column_families, &ret.second, &ret.first);
+    if (!s.ok())
+    {
+        STORAGE_LOG(ERROR) << LOG_BADGE("open rocksDB with columnFamilies failed")
+                           << LOG_KV("dbName", dbName) << LOG_KV("message", s.ToString());
+    }
+    return ret;
 }
 
 RocksDBAdapter::Ptr RocksDBAdapterFactory::createAdapter(
     const std::string& _dbName, int _perfixLength)
 {
-    auto db = createRocksDB(_dbName, _perfixLength);
-    std::shared_ptr<RocksDBAdapter> rocksdbStorage = std::make_shared<RocksDBAdapter>(db);
+    vector<string> columnFamilies{METADATA_COLUMN_NAME, kDefaultColumnFamilyName};
+    auto ret = createRocksDB(_dbName, _perfixLength, true, columnFamilies);
+    assert(ret.first);
+    std::shared_ptr<RocksDBAdapter> rocksdbStorage =
+        std::make_shared<RocksDBAdapter>(ret.first, ret.second[0]);
     return rocksdbStorage;
 }
 }  // namespace storage

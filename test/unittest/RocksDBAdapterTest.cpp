@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @brief the test of rocksdb adapter
- * @file RocksDBAdapterTest.h
+ * @file RocksDBAdapterTest.cpp
  */
 
 #include "RocksDBAdapter/RocksDBAdapter.h"
@@ -39,7 +39,6 @@ struct RocksDBAdapterFixture
     {
         factory = make_shared<RocksDBAdapterFactory>(testPath.string());
         adapter = factory->createAdapter("test_db_1", RocksDBAdapter::TABLE_PERFIX_LENGTH);
-        rocksdb = factory->createRocksDB("test_db_2", RocksDBAdapter::TABLE_PERFIX_LENGTH);
         testTableInfo =
             std::make_shared<storage::TableInfo>(testTableName, testTableKey, "value1,value2");
         testTableInfo->newTable = true;
@@ -47,7 +46,6 @@ struct RocksDBAdapterFixture
     ~RocksDBAdapterFixture()
     {
         adapter.reset();
-        delete rocksdb;
         if (fs::exists(testPath))
         {
             fs::remove_all(testPath);
@@ -56,7 +54,6 @@ struct RocksDBAdapterFixture
     fs::path testPath = "./unittest_db";
     std::shared_ptr<RocksDBAdapter> adapter = nullptr;
     std::shared_ptr<RocksDBAdapterFactory> factory = nullptr;
-    rocksdb::DB* rocksdb = nullptr;
     std::shared_ptr<TableInfo> testTableInfo = nullptr;
     string testTableName = "t_test";
     string testTableKey = "key";

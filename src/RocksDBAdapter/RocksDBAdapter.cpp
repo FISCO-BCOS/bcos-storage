@@ -43,16 +43,14 @@ namespace storage
 {
 using string_buf =
     boost::iostreams::stream_buffer<boost::iostreams::back_insert_device<std::string>>;
-const char* const METADATA_COLUMN_NAME = "meta";
+
 const char* const CURRENT_TABLE_ID = "tableID";
 const string TABLE_PERFIX = "t";
 const char* const TABLE_KEY_PERFIX = "k";
 
-RocksDBAdapter::RocksDBAdapter(rocksdb::DB* _db) : m_db(_db)
-{
-    auto s = m_db->CreateColumnFamily(ColumnFamilyOptions(), METADATA_COLUMN_NAME, &m_metadataCF);
-    assert(s.ok());
-}
+RocksDBAdapter::RocksDBAdapter(rocksdb::DB* _db, rocksdb::ColumnFamilyHandle* _handler)
+  : m_db(_db), m_metadataCF(_handler)
+{}
 
 RocksDBAdapter::~RocksDBAdapter()
 {
@@ -146,7 +144,7 @@ std::vector<std::string> RocksDBAdapter::getPrimaryKeys(
 }
 
 std::shared_ptr<Entry> RocksDBAdapter::getRow(
-    std::shared_ptr<TableInfo>& _tableInfo, const std::string_view& _key)
+    std::shared_ptr<TableInfo> _tableInfo, const std::string_view& _key)
 {
     // get TableID according tableName,
     auto perfixPair = getTablePerfix(_tableInfo->name);
@@ -175,7 +173,7 @@ std::shared_ptr<Entry> RocksDBAdapter::getRow(
 }
 
 std::map<std::string, std::shared_ptr<Entry>> RocksDBAdapter::getRows(
-    std::shared_ptr<TableInfo>& _tableInfo, const std::vector<std::string>& _keys)
+    std::shared_ptr<TableInfo> _tableInfo, const std::vector<std::string>& _keys)
 {
     std::map<std::string, std::shared_ptr<Entry>> ret;
     if (_keys.empty())
