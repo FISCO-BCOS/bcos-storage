@@ -21,7 +21,8 @@
 #pragma once
 
 #include "RocksDBAdapter.h"
-#include "rocksdb/options.h"
+#include "rocksdb/db.h"
+#include <utility>
 
 namespace rocksdb
 {
@@ -37,8 +38,10 @@ public:
     explicit RocksDBAdapterFactory(const std::string& _dbPath) : m_DBPath(_dbPath) {}
     virtual ~RocksDBAdapterFactory() {}
     RocksDBAdapter::Ptr createAdapter(const std::string& _dbName, int _perfixLength = 0);
-    rocksdb::DB* createRocksDB(
-        const std::string& _dbName, int _perfixLength = 0, bool _createIfMissing = true);
+    std::pair<rocksdb::DB*, std::vector<rocksdb::ColumnFamilyHandle*>> createRocksDB(
+        const std::string& _dbName, int _perfixLength = 0, bool _createIfMissing = true,
+        const std::vector<std::string>& _columnFamilies = std::vector<std::string>{
+            rocksdb::kDefaultColumnFamilyName});
 
 private:
     const std::string m_DBPath;

@@ -30,11 +30,12 @@ namespace bcos
 {
 namespace storage
 {
-StorageImpl::StorageImpl(std::shared_ptr<RocksDBAdapterFactory> _stateDBFactory, size_t _poolSize)
-  : m_stateDBFactory(_stateDBFactory)
+StorageImpl::StorageImpl(std::shared_ptr<AdapterInterface> _stateDB,
+    std::shared_ptr<KVDBInterface> _kvDB, size_t _poolSize)
+  : m_stateDB(_stateDB), m_kvDB(_kvDB)
 {
-    m_stateDB = m_stateDBFactory->createAdapter("/rocksDB", RocksDBAdapter::TABLE_PERFIX_LENGTH);
-    m_db = shared_ptr<rocksdb::DB>(m_stateDBFactory->createRocksDB("/local"));
+    assert(m_stateDB);
+    assert(m_kvDB);
     m_threadPool = std::make_shared<bcos::ThreadPool>("asyncTasks", _poolSize);
 }
 
@@ -268,49 +269,24 @@ void StorageImpl::addStateCache(protocol::BlockNumber _blockNumber, protocol::Bl
 bool StorageImpl::put(
     const std::string& _columnFamily, const std::string_view& key, const std::string_view& value)
 {
-    rocksdb::ColumnFamilyHandle* cf = nullptr;
-    auto s = m_db->CreateColumnFamily(ColumnFamilyOptions(), _columnFamily, &cf);
-    assert(s.ok());
-    m_db->Put(WriteOptions(), cf, Slice(key.data(), key.size()), Slice(value.data(), value.size()));
-    s = m_db->DestroyColumnFamilyHandle(cf);
-    return s.ok();
+    return m_kvDB->put(_columnFamily, key, value);
 }
 
 std::string StorageImpl::get(const std::string& _columnFamily, const std::string_view& key)
 {
-    rocksdb::ColumnFamilyHandle* cf = nullptr;
-    auto s = m_db->CreateColumnFamily(ColumnFamilyOptions(), _columnFamily, &cf);
-    assert(s.ok());
-    string value;
-    m_db->Get(ReadOptions(), cf, Slice(key.data(), key.size()), &value);
-    s = m_db->DestroyColumnFamilyHandle(cf);
-    assert(s.ok());
-    return value;
+    return m_kvDB->get(_columnFamily, key);
 }
 
 void StorageImpl::asyncGetBatch(const std::string& _columnFamily,
     std::shared_ptr<std::vector<std::string_view>> _keys,
     std::function<void(Error, std::shared_ptr<std::vector<std::string>>)> _callback)
 {
-    auto db = std::weak_ptr<rocksdb::DB>(std::dynamic_pointer_cast<rocksdb::DB>(m_db));
+    auto db = std::weak_ptr<KVDBInterface>(m_kvDB);
     m_threadPool->enqueue([_columnFamily, _keys, _callback, db]() {
-        auto rocksdb = db.lock();
-        if (rocksdb)
+        auto kvDB = db.lock();
+        if (kvDB)
         {
-            rocksdb::ColumnFamilyHandle* cf = nullptr;
-            auto s = rocksdb->CreateColumnFamily(ColumnFamilyOptions(), _columnFamily, &cf);
-            assert(s.ok());
-            vector<Slice> keys;
-            keys.reserve(_keys->size());
-            for (auto& key : *_keys)
-            {
-                keys.emplace_back(key.data(), key.size());
-            }
-            auto values = make_shared<vector<string>>();
-            rocksdb->MultiGet(ReadOptions(), std::vector<ColumnFamilyHandle*>(keys.size(), cf),
-                keys, values.get());
-            s = rocksdb->DestroyColumnFamilyHandle(cf);
-            assert(s.ok());
+            auto values = kvDB->multiGet(_columnFamily, *_keys);
             _callback(Error(), values);
         }
         else

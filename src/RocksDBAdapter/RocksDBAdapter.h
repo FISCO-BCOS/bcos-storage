@@ -36,21 +36,22 @@ namespace bcos
 {
 namespace storage
 {
+const char* const METADATA_COLUMN_NAME = "meta";
 class RocksDBAdapter : public AdapterInterface
 {
 public:
     static const int TABLE_PERFIX_LENGTH = 9;  //"t" + sizeof(int64_t)
     // using CryptHandler = std::function<void(std::string const&, std::string&)>;
     typedef std::shared_ptr<RocksDBAdapter> Ptr;
-    explicit RocksDBAdapter(rocksdb::DB* _db);
+    explicit RocksDBAdapter(rocksdb::DB* _db, rocksdb::ColumnFamilyHandle* handler);
     virtual ~RocksDBAdapter();
 
     std::vector<std::string> getPrimaryKeys(std::shared_ptr<TableInfo> _tableInfo,
         std::shared_ptr<Condition> _condition) const override;
     std::shared_ptr<Entry> getRow(
-        std::shared_ptr<TableInfo>& _tableInfo, const std::string_view& _key) override;
+        std::shared_ptr<TableInfo> _tableInfo, const std::string_view& _key) override;
     std::map<std::string, std::shared_ptr<Entry>> getRows(
-        std::shared_ptr<TableInfo>& _tableInfo, const std::vector<std::string>& _keys) override;
+        std::shared_ptr<TableInfo> _tableInfo, const std::vector<std::string>& _keys) override;
     size_t commitTables(const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
         std::vector<std::shared_ptr<std::map<std::string, std::shared_ptr<Entry>>>>& _tableDatas)
         override;

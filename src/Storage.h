@@ -20,11 +20,11 @@
  */
 
 #pragma once
-#include "AdapterInterface.h"
-#include "RocksDBAdapter/RocksDBAdapterFactory.h"
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "tbb/concurrent_unordered_map.h"
 
+#include "AdapterInterface.h"
+#include "KVDBInterface.h"
+#include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include <shared_mutex>
 
 namespace bcos
 {
@@ -35,7 +35,8 @@ class StorageImpl : public StorageInterface
 {
 public:
     using Ptr = std::shared_ptr<StorageImpl>;
-    explicit StorageImpl(std::shared_ptr<RocksDBAdapterFactory> _stateDBFactory, size_t _poolSize = 4);
+    explicit StorageImpl(std::shared_ptr<AdapterInterface> _stateDB,
+        std::shared_ptr<KVDBInterface> _kvDB, size_t _poolSize = 4);
     ~StorageImpl() {}
     std::vector<std::string> getPrimaryKeys(std::shared_ptr<TableInfo> _tableInfo,
         std::shared_ptr<Condition> _condition) const override;
@@ -89,10 +90,9 @@ public:
     };
 
 protected:
-    std::shared_ptr<RocksDBAdapterFactory> m_stateDBFactory = nullptr;
     std::shared_ptr<AdapterInterface> m_stateDB = nullptr;
+    std::shared_ptr<KVDBInterface> m_kvDB = nullptr;
     std::shared_ptr<ThreadPool> m_threadPool = nullptr;
-    std::shared_ptr<rocksdb::DB> m_db;
     mutable std::shared_mutex m_number2TableFactoryMutex;
     std::map<protocol::BlockNumber, BlockCache> m_number2TableFactory;
 };
