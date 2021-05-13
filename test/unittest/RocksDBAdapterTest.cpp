@@ -18,6 +18,7 @@
  */
 
 #include "RocksDBAdapter/RocksDBAdapter.h"
+#include "bcos-framework/libtable/TableFactory.h"
 #include "RocksDBAdapter/RocksDBAdapterFactory.h"
 #include "rocksdb/db.h"
 #include <boost/test/unit_test.hpp>
@@ -88,8 +89,18 @@ BOOST_AUTO_TEST_CASE(commitTables)
     (*tableData)[to_string(count + 1)] = entry;
 
     datas.push_back(tableData);
+
+    // mock create table
+    auto sysTableInfo = getSysTableInfo(SYS_TABLE);
+    infos.push_back(sysTableInfo);
+    auto sysTableData = make_shared<map<string, Entry::Ptr>>();
+    entry = make_shared<Entry>();
+    entry->setField(SYS_TABLE_KEY, testTableInfo->name);
+    (*sysTableData)[testTableInfo->name] = entry;
+
+    datas.push_back(sysTableData);
     ret = adapter->commitTables(infos, datas);
-    BOOST_TEST(ret == count);
+    BOOST_TEST(ret == count + 1); // sys table
 
     for (size_t i = 0; i < count; ++i)
     {

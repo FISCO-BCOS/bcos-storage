@@ -19,7 +19,7 @@
  * @date: 2021-04-07
  */
 #pragma once
-#include "interfaces/storage/Common.h"
+#include "bcos-framework/interfaces/storage/Common.h"
 #include "libutilities/Error.h"
 #include <functional>
 

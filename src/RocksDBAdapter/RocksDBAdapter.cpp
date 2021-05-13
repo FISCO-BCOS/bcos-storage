@@ -20,6 +20,7 @@
  */
 
 #include "RocksDBAdapter.h"
+#include "bcos-framework/interfaces/storage/TableInterface.h"
 #include "boost/archive/binary_iarchive.hpp"
 #include "boost/archive/binary_oarchive.hpp"
 #include "boost/iostreams/device/back_inserter.hpp"
@@ -32,6 +33,7 @@
 #include "tbb/parallel_for.h"
 #include "tbb/spin_mutex.h"
 #include <memory>
+#include <mutex>
 #include <thread>
 
 using namespace std;
@@ -45,12 +47,21 @@ using string_buf =
     boost::iostreams::stream_buffer<boost::iostreams::back_insert_device<std::string>>;
 
 const char* const CURRENT_TABLE_ID = "tableID";
-const string TABLE_PERFIX = "t";
+const char* const TABLE_PERFIX = "t";
 const char* const TABLE_KEY_PERFIX = "k";
 
 RocksDBAdapter::RocksDBAdapter(rocksdb::DB* _db, rocksdb::ColumnFamilyHandle* _handler)
   : m_db(_db), m_metadataCF(_handler)
-{}
+{
+    int64_t tableID = 0;
+    auto realKey = string(TABLE_PERFIX) + SYS_TABLE;
+    string tablePerfix = TABLE_PERFIX;
+    tablePerfix.append((char*)&tableID, sizeof(tableID));
+
+    {  // insert into cache
+        m_tableIDCache[realKey] = tablePerfix;
+    }
+}
 
 RocksDBAdapter::~RocksDBAdapter()
 {
@@ -63,10 +74,10 @@ RocksDBAdapter::~RocksDBAdapter()
 
 std::pair<std::string, bool> RocksDBAdapter::getTablePerfix(const std::string& _tableName) const
 {
-    // perfix+tableName store tableID, store tableID in meta column Family
+    // TABLE_PERFIX+tableName store tableID, store tableID in meta column Family
     // tableID use 8B
-    static string perfix("t");
-    auto realKey = perfix + _tableName;
+
+    auto realKey = TABLE_PERFIX + _tableName;
 
     {  // query from cache
         std::shared_lock lock(m_tableIDCacheMutex);
@@ -81,9 +92,8 @@ std::pair<std::string, bool> RocksDBAdapter::getTablePerfix(const std::string& _
     auto status = m_db->Get(ReadOptions(), m_metadataCF, Slice(realKey), &value);
     if (!status.ok())
     {  // panic
-        STORAGE_LOG(ERROR) << LOG_BADGE("RocksDBAdapter getTablePerfix failed")
-                           << LOG_DESC("table not exist") << LOG_KV("name", _tableName)
-                           << LOG_KV("message", status.ToString());
+        STORAGE_LOG(ERROR) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("table not exist")
+                           << LOG_KV("name", _tableName) << LOG_KV("message", status.ToString());
         return std::make_pair("", false);
     }
     {  // insert into cache
@@ -126,7 +136,7 @@ std::vector<std::string> RocksDBAdapter::getPrimaryKeys(
         return ret;
     }
     auto& tablePerfix = perfixPair.first;
-    // perfix query
+    // TABLE_PERFIX query
     ReadOptions read_options;
     read_options.auto_prefix_mode = true;
     auto iter = m_db->NewIterator(read_options);
@@ -136,10 +146,11 @@ std::vector<std::string> RocksDBAdapter::getPrimaryKeys(
         size_t start = TABLE_PERFIX_LENGTH + 1;  // 1 is length of TABLE_KEY_PERFIX
         if (!_condition || _condition->isValid(
                                string_view(iter->key().data() + start, iter->key().size() - start)))
-        {  // filter by condition, the key need remove perfix
+        {  // filter by condition, the key need remove TABLE_PERFIX
             ret.emplace_back(iter->key().ToString().substr(start));
         }
     }
+    delete iter;
     return ret;
 }
 
@@ -160,7 +171,7 @@ std::shared_ptr<Entry> RocksDBAdapter::getRow(
     {
         STORAGE_LOG(DEBUG) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("getRow failed")
                            << LOG_KV("name", _tableInfo->name) << LOG_KV("key", _key)
-                           << LOG_KV("message", status.ToString());
+                           << LOG_KV("message", status.ToString()) << LOG_KV("realKey", realKey);
         return nullptr;
     }
     // deserialization the value to vector
@@ -188,39 +199,55 @@ std::map<std::string, std::shared_ptr<Entry>> RocksDBAdapter::getRows(
     }
     auto tablePerfix = std::move(perfixPair.first);
     // construct the real key and batch get
-    vector<string> realkeys;
-    realkeys.reserve(_keys.size());
-    for (size_t i = 0; i < _keys.size(); ++i)
-    {
-        realkeys.emplace_back(tablePerfix + TABLE_KEY_PERFIX + _keys[i]);
-    }
-    vector<Slice> keys;
-    keys.reserve(_keys.size());
-    for (size_t i = 0; i < _keys.size(); ++i)
-    {
-        keys.emplace_back(realkeys[i]);
-    }
+    vector<string> realkeys(_keys.size(), tablePerfix + TABLE_KEY_PERFIX);
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, _keys.size()), [&](const tbb::blocked_range<size_t>& range) {
+            for (auto it = range.begin(); it != range.end(); ++it)
+            {
+                realkeys[it].append(_keys[it]);
+            }
+        });
+
+    vector<Slice> keys(_keys.size(), Slice());
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, _keys.size()), [&](const tbb::blocked_range<size_t>& range) {
+            for (auto it = range.begin(); it != range.end(); ++it)
+            {
+                keys[it] = Slice(realkeys[it]);
+            }
+        });
     vector<string> values;
     auto status = m_db->MultiGet(ReadOptions(), keys, &values);
-    for (size_t i = 0; i < status.size(); ++i)
-    {
-        if (status[i].ok())
-        {
-            vector<string> res;
-            stringstream ss(values[i]);
-            boost::archive::binary_iarchive ia(ss);
-            ia >> res;
-            ret.insert(std::make_pair(_keys[i], vectorToEntry(_tableInfo, res)));
-        }
-        else
-        {
-            STORAGE_LOG(ERROR) << LOG_BADGE("RocksDBAdapter getRows error")
-                               << LOG_KV("name", _tableInfo->name) << LOG_KV("key", _keys[i])
-                               << LOG_KV("message", status[i].ToString())
-                               << LOG_KV("realKey", keys[i].ToString());
-            ret.insert(std::make_pair(_keys[i], nullptr));
-        }
-    }
+    mutex retMutex;
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, _keys.size()), [&](const tbb::blocked_range<size_t>& range) {
+            for (auto it = range.begin(); it != range.end(); ++it)
+            {
+                if (status[it].ok())
+                {
+                    vector<string> res;
+                    stringstream ss(values[it]);
+                    boost::archive::binary_iarchive ia(ss);
+                    ia >> res;
+                    {
+                        std::lock_guard<std::mutex> lock(retMutex);
+                        ret.insert(std::make_pair(_keys[it], vectorToEntry(_tableInfo, res)));
+                    }
+                }
+                else
+                {
+                    STORAGE_LOG(ERROR)
+                        << LOG_BADGE("RocksDBAdapter getRows error")
+                        << LOG_KV("name", _tableInfo->name) << LOG_KV("key", _keys[it])
+                        << LOG_KV("message", status[it].ToString())
+                        << LOG_KV("realKey", keys[it].ToString());
+                    {
+                        std::lock_guard<std::mutex> lock(retMutex);
+                        ret.insert(std::make_pair(_keys[it], nullptr));
+                    }
+                }
+            }
+        });
     return ret;
 }
 
@@ -234,47 +261,62 @@ size_t RocksDBAdapter::commitTables(const std::vector<std::shared_ptr<TableInfo>
                            << LOG_DESC("commitTables info and data size mismatch");
         return 0;
     }
+    assert(_tableInfos.size() == _tableDatas.size());
+    STORAGE_LOG(INFO) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("commitTables")
+                      << LOG_KV("size", _tableDatas.size());
+
     WriteBatch writeBatch;
     tbb::spin_mutex batchMutex;
+
     // assign tableID for new tables
     tbb::parallel_for(tbb::blocked_range<size_t>(0, _tableInfos.size()),
         [&](const tbb::blocked_range<size_t>& range) {
             for (size_t i = range.begin(); i < range.end(); ++i)
             {
                 auto tableInfo = _tableInfos[i];
-                auto tablePerfix = TABLE_PERFIX;
-                if (tableInfo->newTable)
+                if (tableInfo->name == SYS_TABLE)
                 {
-                    auto tableID = getNextTableID();
-                    auto realKey = TABLE_PERFIX + tableInfo->name;
-                    tablePerfix.append((char*)&tableID, sizeof(tableID));
+                    auto data = _tableDatas[i];
+                    for (auto& item : *data)
+                    {
+                        auto tableID = getNextTableID();
+                        auto realKey = TABLE_PERFIX + item.first;
+                        string tablePerfix = TABLE_PERFIX;
+                        tablePerfix.append((char*)&tableID, sizeof(tableID));
 
-                    {  // insert into cache
-                        std::unique_lock lock(m_tableIDCacheMutex);
-                        m_tableIDCache[realKey] = tablePerfix;
-                    }
-                    {  // put new tableID to write batch
-                        tbb::spin_mutex::scoped_lock lock(batchMutex);
+                        {  // insert into cache
+                            std::unique_lock lock(m_tableIDCacheMutex);
+                            m_tableIDCache[realKey] = tablePerfix;
+                        }
+                        // put new tableID to write batch
                         writeBatch.Put(m_metadataCF, Slice(realKey), Slice(tablePerfix));
-                    }
 #if 0
-                    STORAGE_LOG(TRACE)
-                        << LOG_BADGE("RocksDBAdapter new table") << LOG_KV("name",
-                        tableInfo->name)
-                        << LOG_KV("id", tableID) << LOG_KV("tablePerfix size",
-                        tablePerfix.size());
+                        STORAGE_LOG(TRACE)
+                            << LOG_BADGE("RocksDBAdapter new table")
+                            << LOG_KV("name", tableInfo->name) << LOG_KV("id", tableID)
+                            << LOG_KV("tablePerfix size", tablePerfix.size())
+                            << LOG_KV("realKey", realKey);
 #endif
-                }
-                else
-                {
-                    auto perfixPair = getTablePerfix(tableInfo->name);
-                    if (!perfixPair.second)
-                    {  // panic
-                        STORAGE_LOG(ERROR) << LOG_BADGE("RocksDBAdapter")
-                                           << LOG_DESC("commitTables info and data size mismatch");
                     }
-                    tablePerfix = std::move(perfixPair.first);
                 }
+            }
+        });
+    // process data
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, _tableInfos.size()),
+        [&](const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i < range.end(); ++i)
+            {
+                auto tableInfo = _tableInfos[i];
+                string tablePerfix = TABLE_PERFIX;
+                auto perfixPair = getTablePerfix(tableInfo->name);
+                if (!perfixPair.second)
+                {  // panic
+                    STORAGE_LOG(ERROR)
+                        << LOG_BADGE("commitTables") << LOG_DESC("getTablePerfix failed")
+                        << LOG_KV("name", tableInfo->name);
+                }
+                assert(perfixPair.second);
+                tablePerfix = std::move(perfixPair.first);
                 // parallel process tables data, convert to map of key value string
                 auto tableData = _tableDatas[i];
                 for (auto& data : *tableData)
@@ -289,6 +331,7 @@ size_t RocksDBAdapter::commitTables(const std::vector<std::shared_ptr<TableInfo>
                     vector<string> values;
                     values.reserve(data.second->size());
                     values.emplace_back(data.second->getField(tableInfo->key));
+
                     for (auto& columnName : tableInfo->fields)
                     {
                         values.emplace_back(data.second->getField(columnName));
