@@ -58,29 +58,44 @@ RocksDBAdapterFactory::createRocksDB(const std::string& _dbName, int _perfixLeng
         options.prefix_extractor.reset(NewCappedPrefixTransform(_perfixLength));
     }
     std::vector<ColumnFamilyDescriptor> column_families;
-    for (auto& columnName : _columnFamilies)
+
+    std::vector<std::string> currentColumnFamilies;
+    DB::ListColumnFamilies(options, dbName, &currentColumnFamilies);
+    column_families.push_back(
+        ColumnFamilyDescriptor(rocksdb::kDefaultColumnFamilyName, ColumnFamilyOptions()));
+    for (auto& columnName : currentColumnFamilies)
     {
         column_families.push_back(ColumnFamilyDescriptor(columnName, ColumnFamilyOptions()));
     }
-    std::vector<std::string> currentColumnFamilies;
-    DB::ListColumnFamilies(options, dbName, &currentColumnFamilies);
 
-    DB* db;
-    Status s = DB::Open(options, dbName, &db);
-    if (!s.ok())
+    DB* db = nullptr;
+    std::vector<rocksdb::ColumnFamilyHandle*> tempHandlers;
+    Status s = DB::Open(options, dbName, column_families, &tempHandlers, &db);
+    if (!s.ok() && !db)
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("open rocksDB failed")
-                           << LOG_KV("dbName", dbName) << LOG_KV("message", s.ToString());
+        STORAGE_LOG(ERROR) << LOG_BADGE("open rocksDB failed") << LOG_KV("dbName", dbName)
+                           << LOG_KV("message", s.ToString());
     }
+    assert(db);
     for (auto& name : _columnFamilies)
     {
         if (find(currentColumnFamilies.begin(), currentColumnFamilies.end(), name) ==
             currentColumnFamilies.end())
         {
+            if (name == rocksdb::kDefaultColumnFamilyName)
+            {
+                continue;
+            }
             ColumnFamilyHandle* cf;
             db->CreateColumnFamily(ColumnFamilyOptions(), name, &cf);
             db->DestroyColumnFamilyHandle(cf);
+            column_families.push_back(ColumnFamilyDescriptor(name, ColumnFamilyOptions()));
         }
+    }
+    for (auto& handler : tempHandlers)
+    {
+        auto s = db->DestroyColumnFamilyHandle(handler);
+        assert(s.ok());
     }
     delete db;
     s = DB::Open(options, dbName, column_families, &ret.second, &ret.first);
@@ -95,7 +110,7 @@ RocksDBAdapterFactory::createRocksDB(const std::string& _dbName, int _perfixLeng
 RocksDBAdapter::Ptr RocksDBAdapterFactory::createAdapter(
     const std::string& _dbName, int _perfixLength)
 {
-    vector<string> columnFamilies{METADATA_COLUMN_NAME, kDefaultColumnFamilyName};
+    vector<string> columnFamilies{METADATA_COLUMN_NAME};
     auto ret = createRocksDB(_dbName, _perfixLength, true, columnFamilies);
     assert(ret.first);
     std::shared_ptr<RocksDBAdapter> rocksdbStorage =

@@ -40,8 +40,7 @@ public:
     RocksDBAdapter::Ptr createAdapter(const std::string& _dbName, int _perfixLength = 0);
     std::pair<rocksdb::DB*, std::vector<rocksdb::ColumnFamilyHandle*>> createRocksDB(
         const std::string& _dbName, int _perfixLength = 0, bool _createIfMissing = true,
-        const std::vector<std::string>& _columnFamilies = std::vector<std::string>{
-            rocksdb::kDefaultColumnFamilyName});
+        const std::vector<std::string>& _columnFamilies = std::vector<std::string>{});
 
 private:
     const std::string m_DBPath;
