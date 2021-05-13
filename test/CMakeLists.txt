@@ -27,7 +27,13 @@ add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR}/src)
 
 find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
-target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework ${STORAGE_TARGET} bcos-framework::utilities)
+
+hunter_add_package(wedpr-crypto)
+find_package(wedpr-crypto CONFIG QUIET REQUIRED)
+
+target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework ${STORAGE_TARGET} bcos-framework::utilities
+                        bcos-framework::protocol bcos-framework::protocol-pb bcos-framework::codec
+                        bcos-framework::table wedpr-crypto::crypto)
 
 # for code coverage
 if (COVERAGE)
