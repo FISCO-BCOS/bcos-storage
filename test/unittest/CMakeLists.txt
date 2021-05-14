@@ -17,7 +17,7 @@
 # ------------------------------------------------------------------------------
 file(GLOB_RECURSE SOURCES "*.cpp" "*.h")
 # cmake settings
-include_directories(${PROJECT_SOURCE_DIR}/..)
+
 include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-storage)
 config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
