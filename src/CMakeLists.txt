@@ -6,7 +6,8 @@ file(GLOB HEADERS "*.h" "./RocksDBAdapter/*.h")
 hunter_add_package(zstd)
 find_package(zstd CONFIG REQUIRED)
 # list(APPEND CMAKE_MODULE_PATH "${zstd_DIR}/cmake")
-
+set(zstd_ROOT ${ZSTD_ROOT})
+message(status ">>>>>>>>ZSTD_ROOT = ${ZSTD_ROOT}")
 hunter_add_package(rocksdb)
 find_package(RocksDB CONFIG REQUIRED)
 
