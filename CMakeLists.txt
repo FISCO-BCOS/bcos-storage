@@ -14,7 +14,6 @@ FetchContent_Declare(bcos-cmake-scripts
     GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/bcos-cmake-scripts.git
     GIT_TAG 8727db50f2b505a178bdf138acb99e78ab680531
     SOURCE_DIR ${BCOS_CMAKE_SCRIPTS_DIR}
-    UPDATE_COMMAND git fetch
     LOG_CONFIGURE 1
     LOG_DOWNLOAD 1
     LOG_UPDATE 1
