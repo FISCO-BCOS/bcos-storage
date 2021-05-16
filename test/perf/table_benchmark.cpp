@@ -126,7 +126,7 @@ int main(int argc, const char* argv[])
 
     auto performance = [&](const string& description, int count, std::function<void()> operation) {
         auto now = std::chrono::steady_clock::now();
-        cout << "<<<<<<<<<< " << description << endl;
+        // cout << "<<<<<<<<<< " << description << endl;
         operation();
         std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - now;
         cout << "<<<<<<<<<< " << description
@@ -165,10 +165,10 @@ int main(int argc, const char* argv[])
     auto select = [&](const string& tableName, int count) {
         auto table = tableFactory->openTable(tableName);
         assert(table);
-#if 0
         for (int i = 0; i < count; ++i)
         {
             auto entry = table->getRow(to_string(i));
+#if 0
             if (entry != nullptr)
             {
                 cout << "key:" << i << ",value:" << entry->getFieldConst("value").size() << endl;
@@ -177,8 +177,8 @@ int main(int argc, const char* argv[])
             {
                 cout << "empty key:" << i << endl;
             }
-        }
 #endif
+        }
     };
 
     auto traverse = [&](const string& tableName) {
@@ -223,13 +223,14 @@ int main(int argc, const char* argv[])
     performance("Table traverse", keys, [&]() { traverse(testTableName); });
     performance("Table remove", keys, [&]() { remove(testTableName, keys); });
 
-    auto bigValueSet = [&](const string& tableName, const string& value, int count) {
+    string bigValue;
+    for (int i = 0; i < keys; ++i)
+    {
+        bigValue.append(value);
+    }
+    auto bigValueSet = [&](const string& tableName) {
         auto table = tableFactory->openTable(tableName);
-        string bigValue;
-        for (int i = 0; i < count; ++i)
-        {
-            bigValue.append(value);
-        }
+
         cout << "bigValue size:" << bigValue.size() / 1024 << "KB" << endl;
         auto entry = table->newEntry();
         entry->setField("key", "bigValue");
@@ -240,10 +241,10 @@ int main(int argc, const char* argv[])
     auto bigValueGet = [&](const string& tableName) {
         auto table = tableFactory->openTable(tableName);
         auto entry = table->getRow("bigValue");
-        auto bigValue = entry->getFieldConst("value");
-        cout << "bigKey size:" << bigValue.size() / 1024 << "KB" << endl;
+        auto bigV = entry->getFieldConst("value");
+        cout << "bigValue size:" << bigV.size() / 1024 << "KB" << endl;
     };
-    performance("Big Value set", keys, [&]() { bigValueSet("table1", value, keys); });
+    performance("Big Value set", keys, [&]() { bigValueSet("table1"); });
     performance("Big Value get", keys, [&]() { bigValueGet("table1"); });
 
     return 0;
