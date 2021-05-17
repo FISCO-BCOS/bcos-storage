@@ -107,21 +107,21 @@ int main(int argc, const char* argv[])
         return 0;
     }
 
-    rocksdb::WriteBatch writeBatch;
     vector<string> rocksKeys;
     for (int i = 0; i < count; ++i)
     {
         rocksKeys.emplace_back(to_string(i));
     }
     auto insert = [&](const string& value, int count) {
+        rocksdb::WriteBatch writeBatch;
         for (int i = 0; i < count; ++i)
         {
             writeBatch.Put(
                 rocksdb::Slice(rocksKeys[i]), rocksdb::Slice(value.data(), value.size()));
         }
+        db->Write(rocksdb::WriteOptions(), &writeBatch);
     };
 
-    auto commitData = [&]() { db->Write(rocksdb::WriteOptions(), &writeBatch); };
     auto get = [&]() {
         for (auto& key : rocksKeys)
         {
@@ -137,6 +137,7 @@ int main(int argc, const char* argv[])
     }
     auto multiGet = [&]() {
         vector<string> values;
+        values.reserve(rocksKeys.size());
         db->MultiGet(rocksdb::ReadOptions(), rocksSliceKeys, &values);
     };
     auto performance = [&](const string& description, int count, std::function<void()> operation) {
@@ -147,11 +148,6 @@ int main(int argc, const char* argv[])
              << "|time used(s)=" << std::setiosflags(std::ios::fixed) << std::setprecision(3)
              << elapsed.count() << " rounds=" << count << " tps=" << count / elapsed.count() << "|"
              << endl;
-        now = std::chrono::steady_clock::now();
-        commitData();
-        elapsed = std::chrono::steady_clock::now() - now;
-        cout << "<<<<<<<<<< "
-             << "commit time(s)=" << elapsed.count() << endl;
     };
 
 
@@ -171,15 +167,15 @@ int main(int argc, const char* argv[])
     {
         bigValue.append(value);
     }
+    cout << "bigValue size:" << bigValue.size() / 1024 << "KB" << endl;
     auto bigValueSet = [&]() {
-        cout << "bigValue size:" << bigValue.size() / 1024 << "KB" << endl;
         db->Put(rocksdb::WriteOptions(), rocksdb::Slice(bigValueKey), rocksdb::Slice(bigValue));
     };
 
     auto bigValueGet = [&]() {
         string ret;
         db->Get(rocksdb::ReadOptions(), rocksdb::Slice(bigValueKey), &ret);
-        cout << "bigValue size:" << ret.size() / 1024 << "KB" << endl;
+        cout << "get bigValue size:" << ret.size() / 1024 << "KB" << endl;
     };
 
     performance("Big Value set", count, [&]() { bigValueSet(); });

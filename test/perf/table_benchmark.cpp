@@ -87,13 +87,17 @@ int main(int argc, const char* argv[])
     auto keys = params["keys"].as<int>();
     auto valueLength = params["value"].as<int>();
     auto iterate = params["iterate"].as<bool>();
-    int tables = 1000;
+    int tables = 100;
     int64_t blockNumber = 0;
-
+    if (keys % tables != 0)
+    {
+        keys = (keys + tables) / tables * tables;
+    }
 
     cout << "rocksdb path    : " << storagePath << endl;
     cout << "value length(B) : " << valueLength << endl;
     cout << "iterate         : " << iterate << endl;
+    cout << "number of KV    : " << keys << endl;
     auto factory = make_shared<RocksDBAdapterFactory>(storagePath);
     if (iterate)
     {
@@ -150,56 +154,85 @@ int main(int argc, const char* argv[])
         }
     };
 
-    auto insert = [&](const string& tableName, const string& value, int count) {
-        auto table = tableFactory->openTable(tableName);
-        for (int i = 0; i < count; ++i)
-        {
-            auto entry = table->newEntry();
-            entry->setField("key", to_string(i));
-            entry->setField("value", value);
-            entry->setField("value2", value + "2");
-            table->setRow(to_string(i), entry);
-        }
+    auto insert = [&](const string& prefix, const string& value, int count) {
+        auto keysPerTable = count / tables;
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, tables), [&](const tbb::blocked_range<size_t>& range) {
+                for (auto it = range.begin(); it != range.end(); ++it)
+                {
+                    auto tableName = prefix + to_string(it);
+                    auto table = tableFactory->openTable(tableName);
+                    for (int i = 0; i < keysPerTable; ++i)
+                    {
+                        auto entry = table->newEntry();
+                        entry->setField("key", to_string(i));
+                        entry->setField("value", value);
+                        entry->setField("value2", value + "2");
+                        table->setRow(to_string(i), entry);
+                    }
+                }
+            });
     };
 
-    auto select = [&](const string& tableName, int count) {
-        auto table = tableFactory->openTable(tableName);
-        assert(table);
-        for (int i = 0; i < count; ++i)
-        {
-            auto entry = table->getRow(to_string(i));
+    auto select = [&](const string& prefix, int count) {
+        auto keysPerTable = count / tables;
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, tables), [&](const tbb::blocked_range<size_t>& range) {
+                for (auto it = range.begin(); it != range.end(); ++it)
+                {
+                    auto tableName = prefix + to_string(it);
+                    auto table = tableFactory->openTable(tableName);
+
+                    for (int i = 0; i < keysPerTable; ++i)
+                    {
+                        auto entry = table->getRow(to_string(i));
 #if 0
-            if (entry != nullptr)
-            {
-                cout << "key:" << i << ",value:" << entry->getFieldConst("value").size() << endl;
-            }
-            else
-            {
-                cout << "empty key:" << i << endl;
-            }
+                        if (entry != nullptr)
+                        {
+                            cout << "key:" << i << ",value:" << entry->getFieldConst("value").size()
+                                 << endl;
+                        }
+                        else
+                        {
+                            cout << "empty key:" << i << endl;
+                        }
 #endif
-        }
+                    }
+                }
+            });
     };
 
-    auto traverse = [&](const string& tableName) {
-        auto table = tableFactory->openTable(tableName);
-        auto keys = table->getPrimaryKeys(nullptr);
-        auto entries = table->getRows(keys);
+    auto traverse = [&](const string& prefix, int count) {
+        auto keysPerTable = count / tables;
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, tables), [&](const tbb::blocked_range<size_t>& range) {
+                for (auto it = range.begin(); it != range.end(); ++it)
+                {
+                    auto tableName = prefix + to_string(it);
+                    auto table = tableFactory->openTable(tableName);
+                    vector<string> queryKeys;
+                    for (int i = 0; i < keysPerTable; ++i)
+                    {
+                        queryKeys.emplace_back(to_string(i));
+                    }
+                    auto entries = table->getRows(queryKeys);
 #if 0
-        for (auto& item : entries)
-        {
-            auto entry = item.second;
-            if (entry != nullptr)
-            {
-                cout << "key:" << item.first << ",value:" << entry->getFieldConst("value").size()
-                << endl;
-            }
-            else
-            {
-                cout << "empty key:" << item.first << endl;
-            }
-        }
+                    for (auto& item : entries)
+                    {
+                        auto entry = item.second;
+                        if (entry != nullptr)
+                        {
+                            cout << "key:" << item.first << ",value:" << entry->getFieldConst("value").size()
+                            << endl;
+                        }
+                        else
+                        {
+                            cout << "empty key:" << item.first << endl;
+                        }
+                    }
 #endif
+                }
+            });
     };
 
     auto remove = [&](const string& tableName, int count) {
@@ -218,10 +251,10 @@ int main(int argc, const char* argv[])
     }
     performance("create Table", tables, [&]() { createTable("table", tables); });
     string testTableName("table0");
-    performance("Table set", keys, [&]() { insert(testTableName, value, keys); });
-    performance("Table get", keys, [&]() { select(testTableName, keys); });
-    performance("Table traverse", keys, [&]() { traverse(testTableName); });
-    performance("Table remove", keys, [&]() { remove(testTableName, keys); });
+    performance("Table set", keys, [&]() { insert("table", value, keys); });
+    performance("Table get", keys, [&]() { select("table", keys); });
+    performance("Table traverse", keys, [&]() { traverse("table", keys); });
+    // performance("Table remove", keys, [&]() { remove(testTableName, keys); });
 
     string bigValue;
     for (int i = 0; i < keys; ++i)
