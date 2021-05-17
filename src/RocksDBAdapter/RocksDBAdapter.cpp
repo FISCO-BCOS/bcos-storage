@@ -262,9 +262,8 @@ size_t RocksDBAdapter::commitTables(const std::vector<std::shared_ptr<TableInfo>
         return 0;
     }
     assert(_tableInfos.size() == _tableDatas.size());
-    STORAGE_LOG(INFO) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("commitTables")
-                      << LOG_KV("size", _tableDatas.size());
 
+    auto start_time = utcTime();
     WriteBatch writeBatch;
     tbb::spin_mutex batchMutex;
 
@@ -301,7 +300,8 @@ size_t RocksDBAdapter::commitTables(const std::vector<std::shared_ptr<TableInfo>
                 }
             }
         });
-    // process data
+    auto assignID_time_cost = utcTime();
+    // FIXME: process data cost a lot of time, try to parallel the serialization
     tbb::parallel_for(tbb::blocked_range<size_t>(0, _tableInfos.size()),
         [&](const tbb::blocked_range<size_t>& range) {
             for (size_t i = range.begin(); i < range.end(); ++i)
@@ -341,16 +341,17 @@ size_t RocksDBAdapter::commitTables(const std::vector<std::shared_ptr<TableInfo>
                     stringstream ss;
                     boost::archive::binary_oarchive oa(ss);
                     oa << values;
+                    auto realValue = ss.str();
                     {
                         tbb::spin_mutex::scoped_lock lock(batchMutex);
-                        auto data = ss.str();
-                        writeBatch.Put(Slice(realKey), Slice(data.data(), data.size()));
+                        writeBatch.Put(Slice(realKey), Slice(realValue.data(), realValue.size()));
                     }
                     total.fetch_add(1);
                 }
                 // TODO: maybe commit table to different column family according second path
             }
         });
+    auto serialization_time_cost = utcTime();
     // commit current tableID in meta column family
     auto currentTableID = m_tableID.load() - 1;
     writeBatch.Put(m_metadataCF, Slice(CURRENT_TABLE_ID), Slice(to_string(currentTableID)));
@@ -362,6 +363,13 @@ size_t RocksDBAdapter::commitTables(const std::vector<std::shared_ptr<TableInfo>
                            << LOG_KV("message", status.ToString());
         return 0;
     }
+
+    STORAGE_LOG(INFO) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("commitTables")
+                      << LOG_KV("tables", _tableDatas.size()) << LOG_KV("rows", total.load())
+                      << LOG_KV("assignIDTimeCost", assignID_time_cost - start_time)
+                      << LOG_KV("encodeTimeCost", serialization_time_cost - assignID_time_cost)
+                      << LOG_KV("writeDBTimeCost", utcTime() - serialization_time_cost)
+                      << LOG_KV("totalTimeCost", utcTime() - start_time);
     return total.load();
 }
 
