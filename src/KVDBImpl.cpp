@@ -34,9 +34,9 @@ namespace storage
 KVDBImpl::KVDBImpl(rocksdb::DB* _db) : m_db(_db) {}
 
 bool KVDBImpl::put(
-    const std::string& columnFamily, const std::string_view& key, const std::string_view& value)
+    const std::string_view& columnFamily, const std::string_view& key, const std::string_view& value)
 {
-    string realeKey = columnFamily + "_" + string(key);
+    string realeKey =  string(columnFamily) + "_" + string(key);
     auto status = m_db->Put(
         WriteOptions(), Slice(realeKey.data(), realeKey.size()), Slice(value.data(), value.size()));
     if (!status.ok())
@@ -47,10 +47,10 @@ bool KVDBImpl::put(
     return status.ok();
 }
 
-std::string KVDBImpl::get(const std::string& columnFamily, const std::string_view& key)
+std::string KVDBImpl::get(const std::string_view& columnFamily, const std::string_view& key)
 {
     string value;
-    string realeKey = columnFamily + "_" + string(key);
+    string realeKey = string(columnFamily) + "_" + string(key);
     auto status = m_db->Get(ReadOptions(), Slice(realeKey.data(), realeKey.size()), &value);
     if (!status.ok())
     {
@@ -60,8 +60,21 @@ std::string KVDBImpl::get(const std::string& columnFamily, const std::string_vie
     return value;
 }
 
+bool KVDBImpl::remove(const std::string_view& _columnFamily, const std::string_view& _key)
+{
+    string realeKey =  string(_columnFamily) + "_" + string(_key);
+    auto status = m_db->Delete(
+        WriteOptions(), Slice(realeKey.data(), realeKey.size()));
+    if (!status.ok())
+    {
+        STORAGE_LOG(ERROR) << LOG_BADGE("KVDBImpl remove failed") << LOG_KV("key", _key)
+                           << LOG_KV("message", status.ToString());
+    }
+    return status.ok();
+}
+
 std::shared_ptr<std::vector<std::string>> KVDBImpl::multiGet(
-    const std::string& _columnFamily, std::vector<std::string_view>& _keys)
+    const std::string& _columnFamily, std::vector<std::string>& _keys)
 {
     vector<string> realkeys(_keys.size(), _columnFamily);
     vector<Slice> keys;

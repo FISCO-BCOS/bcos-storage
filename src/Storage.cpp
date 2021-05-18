@@ -44,25 +44,31 @@ std::vector<std::string> StorageImpl::getPrimaryKeys(
 {
     return m_stateDB->getPrimaryKeys(_tableInfo, _condition);
 }
+
 std::shared_ptr<Entry> StorageImpl::getRow(
     std::shared_ptr<TableInfo> _tableInfo, const std::string_view& _key)
 {
     return m_stateDB->getRow(_tableInfo, _key);
 }
+
 std::map<std::string, std::shared_ptr<Entry>> StorageImpl::getRows(
     std::shared_ptr<TableInfo> _tableInfo, const std::vector<std::string>& _keys)
 {
     return m_stateDB->getRows(_tableInfo, _keys);
 }
-size_t StorageImpl::commitTables(const std::vector<std::shared_ptr<TableInfo>> _infos,
+
+size_t StorageImpl::commitBlock(protocol::BlockNumber _number,
+    const std::vector<std::shared_ptr<TableInfo>> _infos,
     std::vector<std::shared_ptr<std::map<std::string, std::shared_ptr<Entry>>>>& _datas)
 {
+    // TODO: merge state cache then commit
+    (void)_number;
     return m_stateDB->commitTables(_infos, _datas);
 }
 
 void StorageImpl::asyncGetPrimaryKeys(std::shared_ptr<TableInfo> _tableInfo,
     std::shared_ptr<Condition> _condition,
-    std::function<void(Error, std::vector<std::string>)> _callback)
+    std::function<void(Error::Ptr, std::vector<std::string>)> _callback)
 {
     auto self =
         std::weak_ptr<StorageImpl>(std::dynamic_pointer_cast<StorageImpl>(shared_from_this()));
@@ -71,19 +77,20 @@ void StorageImpl::asyncGetPrimaryKeys(std::shared_ptr<TableInfo> _tableInfo,
         if (storage)
         {
             auto ret = storage->getPrimaryKeys(_tableInfo, _condition);
-            _callback(Error(), ret);
+            _callback(make_shared<Error>(), ret);
         }
         else
         {
-            _callback(
-                Error(StorageInterface::ErrorCode::DataBase_Unavailable, "database is unavailable"),
+            _callback(make_shared<Error>(StorageInterface::ErrorCode::DataBase_Unavailable,
+                          "database is unavailable"),
                 std::vector<std::string>());
         }
     });
 }
 
 void StorageImpl::asyncGetRow(std::shared_ptr<TableInfo> _tableInfo,
-    std::shared_ptr<std::string> _key, std::function<void(Error, std::shared_ptr<Entry>)> _callback)
+    std::shared_ptr<std::string> _key,
+    std::function<void(Error::Ptr, std::shared_ptr<Entry>)> _callback)
 {
     auto self =
         std::weak_ptr<StorageImpl>(std::dynamic_pointer_cast<StorageImpl>(shared_from_this()));
@@ -92,12 +99,12 @@ void StorageImpl::asyncGetRow(std::shared_ptr<TableInfo> _tableInfo,
         if (storage)
         {
             auto ret = storage->getRow(_tableInfo, *_key);
-            _callback(Error(), ret);
+            _callback(make_shared<Error>(), ret);
         }
         else
         {
-            _callback(
-                Error(StorageInterface::ErrorCode::DataBase_Unavailable, "database is unavailable"),
+            _callback(make_shared<Error>(StorageInterface::ErrorCode::DataBase_Unavailable,
+                          "database is unavailable"),
                 nullptr);
         }
     });
@@ -105,7 +112,7 @@ void StorageImpl::asyncGetRow(std::shared_ptr<TableInfo> _tableInfo,
 
 void StorageImpl::asyncGetRows(std::shared_ptr<TableInfo> _tableInfo,
     std::shared_ptr<std::vector<std::string>> _keys,
-    std::function<void(Error, std::map<std::string, std::shared_ptr<Entry>>)> _callback)
+    std::function<void(Error::Ptr, std::map<std::string, std::shared_ptr<Entry>>)> _callback)
 {
     auto self =
         std::weak_ptr<StorageImpl>(std::dynamic_pointer_cast<StorageImpl>(shared_from_this()));
@@ -114,64 +121,64 @@ void StorageImpl::asyncGetRows(std::shared_ptr<TableInfo> _tableInfo,
         if (storage)
         {
             auto ret = storage->getRows(_tableInfo, *_keys);
-            _callback(Error(), ret);
+            _callback(make_shared<Error>(), ret);
         }
         else
         {
-            _callback(
-                Error(StorageInterface::ErrorCode::DataBase_Unavailable, "database is unavailable"),
+            _callback(make_shared<Error>(StorageInterface::ErrorCode::DataBase_Unavailable,
+                          "database is unavailable"),
                 std::map<std::string, std::shared_ptr<Entry>>());
         }
     });
 }
 
-void StorageImpl::asyncCommitTables(std::shared_ptr<std::vector<std::shared_ptr<TableInfo>>> _infos,
+void StorageImpl::asyncCommitBlock(protocol::BlockNumber _blockNumber,
+    std::shared_ptr<std::vector<std::shared_ptr<TableInfo>>> _infos,
     std::shared_ptr<std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>>& _datas,
-    std::function<void(Error, size_t)> _callback)
+    std::function<void(Error::Ptr, size_t)> _callback)
 {
     auto self =
         std::weak_ptr<StorageImpl>(std::dynamic_pointer_cast<StorageImpl>(shared_from_this()));
 
-    m_threadPool->enqueue([_infos, _datas, _callback, self]() {
+    m_threadPool->enqueue([_infos, _datas, _blockNumber, _callback, self]() {
         auto storage = self.lock();
         if (storage)
         {
-            auto ret = storage->commitTables(*_infos, *_datas);
-            _callback(Error(), ret);
+            auto ret = storage->commitBlock(_blockNumber, *_infos, *_datas);
+            _callback(make_shared<Error>(), ret);
         }
         else
         {
-            _callback(
-                Error(StorageInterface::ErrorCode::DataBase_Unavailable, "database is unavailable"),
+            _callback(make_shared<Error>(StorageInterface::ErrorCode::DataBase_Unavailable,
+                          "database is unavailable"),
                 0);
         }
     });
 }
 
 void StorageImpl::asyncAddStateCache(protocol::BlockNumber _blockNumber,
-    protocol::Block::Ptr _block, std::shared_ptr<TableFactory> _tablefactory,
-    std::function<void(Error)> _callback)
+    std::shared_ptr<TableFactory> _tablefactory, std::function<void(Error::Ptr)> _callback)
 {
     auto self =
         std::weak_ptr<StorageImpl>(std::dynamic_pointer_cast<StorageImpl>(shared_from_this()));
 
-    m_threadPool->enqueue([_blockNumber, _block, _tablefactory, _callback, self]() {
+    m_threadPool->enqueue([_blockNumber, _tablefactory, _callback, self]() {
         auto storage = self.lock();
         if (storage)
         {
-            storage->addStateCache(_blockNumber, _block, _tablefactory);
-            _callback(Error());
+            storage->addStateCache(_blockNumber, _tablefactory);
+            _callback(make_shared<Error>());
         }
         else
         {
-            _callback(Error(
+            _callback(make_shared<Error>(
                 StorageInterface::ErrorCode::DataBase_Unavailable, "database is unavailable"));
         }
     });
 }
 
 void StorageImpl::asyncDropStateCache(
-    protocol::BlockNumber _blockNumber, std::function<void(Error)> _callback)
+    protocol::BlockNumber _blockNumber, std::function<void(Error::Ptr)> _callback)
 {
     auto self =
         std::weak_ptr<StorageImpl>(std::dynamic_pointer_cast<StorageImpl>(shared_from_this()));
@@ -181,40 +188,18 @@ void StorageImpl::asyncDropStateCache(
         if (storage)
         {
             storage->dropStateCache(_blockNumber);
-            _callback(Error());
+            _callback(make_shared<Error>());
         }
         else
         {
-            _callback(Error(
+            _callback(make_shared<Error>(
                 StorageInterface::ErrorCode::DataBase_Unavailable, "database is unavailable"));
         }
     });
 }
 
-void StorageImpl::asyncGetBlock(
-    protocol::BlockNumber _blockNumber, std::function<void(Error, protocol::Block::Ptr)> _callback)
-{
-    auto self =
-        std::weak_ptr<StorageImpl>(std::dynamic_pointer_cast<StorageImpl>(shared_from_this()));
-
-    m_threadPool->enqueue([_blockNumber, _callback, self]() {
-        auto storage = self.lock();
-        if (storage)
-        {
-            auto ret = storage->getBlock(_blockNumber);
-            _callback(Error(), ret);
-        }
-        else
-        {
-            _callback(
-                Error(StorageInterface::ErrorCode::DataBase_Unavailable, "database is unavailable"),
-                nullptr);
-        }
-    });
-}
-
 void StorageImpl::asyncGetStateCache(protocol::BlockNumber _blockNumber,
-    std::function<void(Error, std::shared_ptr<TableFactory>)> _callback)
+    std::function<void(Error::Ptr, std::shared_ptr<TableFactory>)> _callback)
 {
     auto self =
         std::weak_ptr<StorageImpl>(std::dynamic_pointer_cast<StorageImpl>(shared_from_this()));
@@ -224,32 +209,23 @@ void StorageImpl::asyncGetStateCache(protocol::BlockNumber _blockNumber,
         if (storage)
         {
             auto ret = storage->getStateCache(_blockNumber);
-            _callback(Error(), ret);
+            _callback(make_shared<Error>(), ret);
         }
         else
         {
-            _callback(
-                Error(StorageInterface::ErrorCode::DataBase_Unavailable, "database is unavailable"),
+            _callback(make_shared<Error>(StorageInterface::ErrorCode::DataBase_Unavailable,
+                          "database is unavailable"),
                 nullptr);
         }
     });
 }
 
-protocol::Block::Ptr StorageImpl::getBlock(protocol::BlockNumber _blockNumber)
-{
-    std::shared_lock lock(m_number2TableFactoryMutex);
-    if (m_number2TableFactory.count(_blockNumber))
-    {
-        return m_number2TableFactory[_blockNumber].block;
-    }
-    return nullptr;
-}
 std::shared_ptr<TableFactory> StorageImpl::getStateCache(protocol::BlockNumber _blockNumber)
 {
     std::shared_lock lock(m_number2TableFactoryMutex);
     if (m_number2TableFactory.count(_blockNumber))
     {
-        return m_number2TableFactory[_blockNumber].tableFactory;
+        return m_number2TableFactory[_blockNumber];
     }
     return nullptr;
 }
@@ -259,40 +235,117 @@ void StorageImpl::dropStateCache(protocol::BlockNumber _blockNumber)
     m_number2TableFactory.erase(_blockNumber);
 }
 
-void StorageImpl::addStateCache(protocol::BlockNumber _blockNumber, protocol::Block::Ptr _block,
-    std::shared_ptr<TableFactory> _tablefactory)
+void StorageImpl::addStateCache(
+    protocol::BlockNumber _blockNumber, std::shared_ptr<TableFactory> _tablefactory)
 {
     std::unique_lock lock(m_number2TableFactoryMutex);
-    m_number2TableFactory[_blockNumber] = BlockCache{_block, _tablefactory};
+    m_number2TableFactory[_blockNumber] = _tablefactory;
 }
 
-bool StorageImpl::put(
-    const std::string& _columnFamily, const std::string_view& key, const std::string_view& value)
+bool StorageImpl::put(const std::string_view& _columnFamily, const std::string_view& key,
+    const std::string_view& value)
 {
     return m_kvDB->put(_columnFamily, key, value);
 }
 
-std::string StorageImpl::get(const std::string& _columnFamily, const std::string_view& key)
+std::string StorageImpl::get(const std::string_view& _columnFamily, const std::string_view& _key)
 {
-    return m_kvDB->get(_columnFamily, key);
+    return m_kvDB->get(_columnFamily, _key);
 }
 
-void StorageImpl::asyncGetBatch(const std::string& _columnFamily,
-    std::shared_ptr<std::vector<std::string_view>> _keys,
-    std::function<void(Error, std::shared_ptr<std::vector<std::string>>)> _callback)
+bool StorageImpl::remove(const std::string_view& _columnFamily, const std::string_view& _key)
+{
+    return m_kvDB->remove(_columnFamily, _key);
+}
+
+void StorageImpl::asyncPut(std::shared_ptr<std::string> _columnFamily,
+    std::shared_ptr<std::string> _key, std::shared_ptr<std::string> _value,
+    std::function<void(Error::Ptr)> _callback)
+{
+    auto db = std::weak_ptr<KVDBInterface>(m_kvDB);
+    m_threadPool->enqueue([_columnFamily, _key, _value, _callback, db]() {
+        auto kvDB = db.lock();
+        if (kvDB)
+        {
+            auto ret = kvDB->put(*_columnFamily, *_key, *_value);
+            if (ret)
+            {
+                _callback(make_shared<Error>());
+            }
+            else
+            {
+            }
+        }
+        else
+        {
+            _callback(make_shared<Error>(
+                StorageInterface::ErrorCode::DataBase_Unavailable, "database is unavailable"));
+        }
+    });
+}
+
+void StorageImpl::asyncGet(std::shared_ptr<std::string> _columnFamily,
+    std::shared_ptr<std::string> _key,
+    std::function<void(Error::Ptr, const std::string& value)> _callback)
+{
+    auto db = std::weak_ptr<KVDBInterface>(m_kvDB);
+    m_threadPool->enqueue([_columnFamily, _key, _callback, db]() {
+        auto kvDB = db.lock();
+        if (kvDB)
+        {
+            auto ret = kvDB->get(*_columnFamily, *_key);
+            _callback(make_shared<Error>(), ret);
+        }
+        else
+        {
+            _callback(make_shared<Error>(StorageInterface::ErrorCode::DataBase_Unavailable,
+                          "database is unavailable"),
+                "");
+        }
+    });
+}
+
+void StorageImpl::asyncRemove(std::shared_ptr<std::string> _columnFamily,
+    std::shared_ptr<std::string> _key, std::function<void(Error::Ptr)> _callback)
+{
+    auto db = std::weak_ptr<KVDBInterface>(m_kvDB);
+    m_threadPool->enqueue([_columnFamily, _key, _callback, db]() {
+        auto kvDB = db.lock();
+        if (kvDB)
+        {
+            auto ret = kvDB->remove(*_columnFamily, *_key);
+            if (ret)
+            {
+                _callback(make_shared<Error>());
+            }
+            else
+            {
+            }
+        }
+        else
+        {
+            _callback(make_shared<Error>(
+                StorageInterface::ErrorCode::DataBase_Unavailable, "database is unavailable"));
+        }
+    });
+}
+
+void StorageImpl::asyncGetBatch(std::shared_ptr<std::string> _columnFamily,
+    std::shared_ptr<std::vector<std::string>> _keys,
+    std::function<void(Error::Ptr, std::shared_ptr<std::vector<std::string>>)> _callback)
 {
     auto db = std::weak_ptr<KVDBInterface>(m_kvDB);
     m_threadPool->enqueue([_columnFamily, _keys, _callback, db]() {
         auto kvDB = db.lock();
         if (kvDB)
         {
-            auto values = kvDB->multiGet(_columnFamily, *_keys);
-            _callback(Error(), values);
+            auto values = kvDB->multiGet(*_columnFamily, *_keys);
+            _callback(make_shared<Error>(), values);
         }
         else
         {
-            _callback(
-                Error(StorageInterface::ErrorCode::DataBase_Unavailable, "database is unavailable"),
+            _callback(make_shared<Error>(StorageInterface::ErrorCode::DataBase_Unavailable,
+                          "database is unavailable"),
                 nullptr);
         }
     });
