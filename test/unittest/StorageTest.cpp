@@ -78,11 +78,12 @@ BOOST_FIXTURE_TEST_SUITE(StorageTest, StorageFixture)
 
 BOOST_AUTO_TEST_CASE(commitTables)
 {
+    protocol::BlockNumber blockNumber = 0;
     // if this ut failed, please `rm -rf unittest_db` and try again
     auto infos = vector<TableInfo::Ptr>();
     auto datas = vector<shared_ptr<map<string, Entry::Ptr>>>();
     infos.push_back(testTableInfo);
-    auto ret = storage->commitTables(infos, datas);
+    auto ret = storage->commitBlock(blockNumber++, infos, datas);
     BOOST_TEST(ret == 0);
 
     auto tableData = make_shared<map<string, Entry::Ptr>>();
@@ -104,7 +105,7 @@ BOOST_AUTO_TEST_CASE(commitTables)
     (*tableData)[to_string(count + 1)] = entry;
 
     datas.push_back(tableData);
-    ret = storage->commitTables(infos, datas);
+    ret = storage->commitBlock(blockNumber++, infos, datas);
     BOOST_TEST(ret == count);
 
     for (size_t i = 0; i < count; ++i)
@@ -138,10 +139,11 @@ BOOST_AUTO_TEST_CASE(commitTables)
 
 BOOST_AUTO_TEST_CASE(asyncInterfaces)
 {
+    protocol::BlockNumber blockNumber = 0;
     auto infos = vector<TableInfo::Ptr>();
     auto datas = vector<shared_ptr<map<string, Entry::Ptr>>>();
     infos.push_back(testTableInfo);
-    auto ret = storage->commitTables(infos, datas);
+    auto ret = storage->commitBlock(blockNumber++, infos, datas);
     BOOST_TEST(ret == 0);
 
     auto tableData = make_shared<map<string, Entry::Ptr>>();
@@ -163,7 +165,7 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
     (*tableData)[to_string(count + 1)] = entry;
 
     datas.push_back(tableData);
-    ret = storage->commitTables(infos, datas);
+    ret = storage->commitBlock(blockNumber++, infos, datas);
     BOOST_TEST(ret == count);
     // add ut for asyncGetPrimaryKeys
     struct Callback : public std::enable_shared_from_this<Callback>
@@ -176,9 +178,9 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
             mutex.lock();
         }
 
-        void onResult(Error _error, std::vector<std::string> _result)
+        void onResult(Error::Ptr _error, std::vector<std::string> _result)
         {
-            BOOST_TEST(_error.errorCode() == 0);
+            BOOST_TEST(_error->errorCode() == 0);
             // include [6, 7, 8, 9]
             BOOST_TEST(_result.size() == total);
             auto valueStr = to_string(value);
@@ -199,7 +201,7 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
     };
     size_t min = 50;
     Callback::Ptr callback = std::make_shared<Callback>(min, 54);
-    std::function<void(Error, std::vector<std::string>)> fp =
+    std::function<void(Error::Ptr, std::vector<std::string>)> fp =
         std::bind(&Callback::onResult, callback, std::placeholders::_1, std::placeholders::_2);
     auto condition = make_shared<Condition>();
     condition->GE(to_string(min));
@@ -222,9 +224,9 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
         typedef std::shared_ptr<Callback2> Ptr;
         explicit Callback2(shared_ptr<vector<string>> _keys) : keys(_keys) { mutex.lock(); }
 
-        void onResult(Error _error, std::map<std::string, std::shared_ptr<Entry>> _result)
+        void onResult(Error::Ptr _error, std::map<std::string, std::shared_ptr<Entry>> _result)
         {
-            BOOST_TEST(_error.errorCode() == 0);
+            BOOST_TEST(_error->errorCode() == 0);
             BOOST_TEST(_result.size() == keys->size());
             for (size_t i = 0; i < keys->size(); ++i)
             {
@@ -249,7 +251,7 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
     }
 
     Callback2::Ptr callback2 = std::make_shared<Callback2>(keys);
-    std::function<void(Error, std::map<std::string, std::shared_ptr<Entry>>)> fp2 =
+    std::function<void(Error::Ptr, std::map<std::string, std::shared_ptr<Entry>>)> fp2 =
         std::bind(&Callback2::onResult, callback2, std::placeholders::_1, std::placeholders::_2);
     storage->asyncGetRows(testTableInfo, keys, fp2);
     // lock to wait for async send
@@ -262,9 +264,9 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
         typedef std::shared_ptr<Callback3> Ptr;
         explicit Callback3(size_t _key) : key(_key) { mutex.lock(); }
 
-        void onResult(Error _error, std::shared_ptr<Entry> _result)
+        void onResult(Error::Ptr _error, std::shared_ptr<Entry> _result)
         {
-            BOOST_TEST(_error.errorCode() == 0);
+            BOOST_TEST(_error->errorCode() == 0);
             BOOST_TEST(_result != nullptr);
             // BOOST_TEST(_result->getField(testTableKey) == to_string(i));
             BOOST_TEST(_result->getField("value1") == to_string(key + 1));
@@ -279,7 +281,7 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
     };
     auto key = make_shared<string>("56");
     Callback3::Ptr callback3 = std::make_shared<Callback3>(56);
-    std::function<void(Error, std::shared_ptr<Entry>)> fp3 =
+    std::function<void(Error::Ptr, std::shared_ptr<Entry>)> fp3 =
         std::bind(&Callback3::onResult, callback3, std::placeholders::_1, std::placeholders::_2);
     storage->asyncGetRow(testTableInfo, key, fp3);
     // lock to wait for async send
@@ -292,10 +294,11 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
 
 BOOST_AUTO_TEST_CASE(TableFactory_cache)
 {
+    protocol::BlockNumber blockNumber = 0;
     auto infos = vector<TableInfo::Ptr>();
     auto datas = vector<shared_ptr<map<string, Entry::Ptr>>>();
     infos.push_back(testTableInfo);
-    auto ret = storage->commitTables(infos, datas);
+    auto ret = storage->commitBlock(blockNumber++, infos, datas);
     BOOST_TEST(ret == 0);
 
     auto tableData = make_shared<map<string, Entry::Ptr>>();
@@ -317,44 +320,48 @@ BOOST_AUTO_TEST_CASE(TableFactory_cache)
     (*tableData)[to_string(count + 1)] = entry;
 
     datas.push_back(tableData);
-    ret = storage->commitTables(infos, datas);
+    ret = storage->commitBlock(blockNumber++, infos, datas);
     BOOST_TEST(ret == count);
     // add ut for addStateCache
     vector<protocol::PBBlock::Ptr> blocks;
     vector<TableFactory::Ptr> tfs;
     auto hashImpl = std::make_shared<Sm3Hash>();
     auto signImpl = std::make_shared<SM2SignatureImpl>();
-    auto cryptoSuite =  std::make_shared<CryptoSuite>(hashImpl, signImpl, nullptr);
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signImpl, nullptr);
     auto blockHeaderFactory = std::make_shared<PBBlockHeaderFactory>(cryptoSuite);
     auto transactionFactory = std::make_shared<PBTransactionFactory>(cryptoSuite);
     auto receiptFactory = std::make_shared<PBTransactionReceiptFactory>(cryptoSuite);
 
     for (size_t i = 0; i < count; ++i)
     {
-        auto block = make_shared<protocol::PBBlock>(blockHeaderFactory, transactionFactory, receiptFactory);
+        auto block =
+            make_shared<protocol::PBBlock>(blockHeaderFactory, transactionFactory, receiptFactory);
         blocks.push_back(block);
         auto tableFactory = make_shared<TableFactory>(storage, hashImpl, i);
         tfs.push_back(tableFactory);
-        storage->addStateCache(i, block, tableFactory);
+        storage->addStateCache(i, tableFactory);
     }
     for (size_t i = 0; i < count; ++i)
     {  // ut for getBlock
-        auto block = storage->getBlock(i);
-        BOOST_TEST(block == blocks[i]);
+        // auto block = storage->getBlock(i);
+        // BOOST_TEST(block == blocks[i]);
+
         // add ut for getStateCache
         auto tf = storage->getStateCache(i);
         BOOST_TEST(tf == tfs[i]);
     }
-    auto block = storage->getBlock(count + 1);
-    BOOST_TEST(block == nullptr);
+    // auto block = storage->getBlock(count + 1);
+    // BOOST_TEST(block == nullptr);
+
     // add ut for getStateCache
     auto tf = storage->getStateCache(count + 1);
     BOOST_TEST(tf == nullptr);
 
     // ut for dropStateCache
     storage->dropStateCache(count - 1);
-    block = storage->getBlock(count - 1);
-    BOOST_TEST(block == nullptr);
+    // block = storage->getBlock(count - 1);
+    // BOOST_TEST(block == nullptr);
+
     // add ut for getStateCache
     tf = storage->getStateCache(count - 1);
     BOOST_TEST(tf == nullptr);
@@ -393,9 +400,9 @@ BOOST_AUTO_TEST_CASE(KVInterfaces)
 
         explicit Callback(size_t _value) : value(_value) { mutex.lock(); }
 
-        void onResult(Error _error, std::shared_ptr<std::vector<std::string>> _result)
+        void onResult(Error::Ptr _error, std::shared_ptr<std::vector<std::string>> _result)
         {
-            BOOST_TEST(_error.errorCode() == 0);
+            BOOST_TEST(_error->errorCode() == 0);
             BOOST_TEST(_result->size() == 1);
             auto originValue = to_string(value);
             auto retValue = (*_result)[0];
@@ -410,12 +417,12 @@ BOOST_AUTO_TEST_CASE(KVInterfaces)
     {
         auto column = to_string(i);
         auto key = to_string(i + 1);
-        std::shared_ptr<std::vector<std::string_view>> pkeys = make_shared<vector<string_view>>();
+        auto pkeys = make_shared<vector<string>>();
         pkeys->push_back(key);
         Callback::Ptr callback = std::make_shared<Callback>(i + 2);
-        std::function<void(Error, std::shared_ptr<std::vector<std::string>>)> fp =
+        std::function<void(Error::Ptr, std::shared_ptr<std::vector<std::string>>)> fp =
             std::bind(&Callback::onResult, callback, std::placeholders::_1, std::placeholders::_2);
-        storage->asyncGetBatch(column, pkeys, fp);
+        storage->asyncGetBatch(make_shared<string>(column), pkeys, fp);
         // lock to wait for async send
         callback->mutex.lock();
         callback->mutex.unlock();
