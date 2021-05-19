@@ -21,6 +21,7 @@
 
 #include "KVDBImpl.h"
 #include "bcos-framework/interfaces/storage/Common.h"
+#include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/db.h"
 
@@ -33,21 +34,24 @@ namespace storage
 {
 KVDBImpl::KVDBImpl(rocksdb::DB* _db) : m_db(_db) {}
 
-bool KVDBImpl::put(
-    const std::string_view& columnFamily, const std::string_view& key, const std::string_view& value)
+Error::Ptr KVDBImpl::put(const std::string_view& columnFamily, const std::string_view& key,
+    const std::string_view& value)
 {
-    string realeKey =  string(columnFamily) + "_" + string(key);
+    string realeKey = string(columnFamily) + "_" + string(key);
     auto status = m_db->Put(
         WriteOptions(), Slice(realeKey.data(), realeKey.size()), Slice(value.data(), value.size()));
     if (!status.ok())
     {
         STORAGE_LOG(ERROR) << LOG_BADGE("KVDBImpl put failed") << LOG_KV("key", key)
                            << LOG_KV("message", status.ToString());
+        return make_shared<Error>(
+            StorageErrorCode::DataBaseUnavailable, status.ToString());
     }
-    return status.ok();
+    return nullptr;
 }
 
-std::string KVDBImpl::get(const std::string_view& columnFamily, const std::string_view& key)
+std::pair<std::string, Error::Ptr> KVDBImpl::get(
+    const std::string_view& columnFamily, const std::string_view& key)
 {
     string value;
     string realeKey = string(columnFamily) + "_" + string(key);
@@ -56,21 +60,32 @@ std::string KVDBImpl::get(const std::string_view& columnFamily, const std::strin
     {
         STORAGE_LOG(ERROR) << LOG_BADGE("KVDBImpl get failed") << LOG_KV("key", key)
                            << LOG_KV("message", status.ToString());
+        if (status.IsNotFound())
+        {
+            return {
+                "", make_shared<Error>(StorageErrorCode::NotFound, status.ToString())};
+        }
+        else
+        {
+            return {"", make_shared<Error>(
+                            StorageErrorCode::DataBaseUnavailable, status.ToString())};
+        }
     }
-    return value;
+    return {value, nullptr};
 }
 
-bool KVDBImpl::remove(const std::string_view& _columnFamily, const std::string_view& _key)
+Error::Ptr KVDBImpl::remove(const std::string_view& _columnFamily, const std::string_view& _key)
 {
-    string realeKey =  string(_columnFamily) + "_" + string(_key);
-    auto status = m_db->Delete(
-        WriteOptions(), Slice(realeKey.data(), realeKey.size()));
+    string realeKey = string(_columnFamily) + "_" + string(_key);
+    auto status = m_db->Delete(WriteOptions(), Slice(realeKey.data(), realeKey.size()));
     if (!status.ok())
     {
         STORAGE_LOG(ERROR) << LOG_BADGE("KVDBImpl remove failed") << LOG_KV("key", _key)
                            << LOG_KV("message", status.ToString());
+        return make_shared<Error>(
+            StorageErrorCode::DataBaseUnavailable, status.ToString());
     }
-    return status.ok();
+    return nullptr;
 }
 
 std::shared_ptr<std::vector<std::string>> KVDBImpl::multiGet(

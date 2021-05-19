@@ -44,7 +44,7 @@ public:
         std::shared_ptr<TableInfo> _tableInfo, const std::string_view& _key) override;
     std::map<std::string, std::shared_ptr<Entry>> getRows(
         std::shared_ptr<TableInfo> _tableInfo, const std::vector<std::string>& _keys) override;
-    size_t commitBlock(protocol::BlockNumber _number,
+    std::pair<size_t, Error::Ptr> commitBlock(protocol::BlockNumber _number,
         const std::vector<std::shared_ptr<TableInfo>> _infos,
         std::vector<std::shared_ptr<std::map<std::string, std::shared_ptr<Entry>>>>& _datas)
         override;
@@ -77,12 +77,12 @@ public:
         protocol::BlockNumber _blockNumber, std::shared_ptr<TableFactory> _tablefactory) override;
 
     // KV store in split database, used to store data off-chain
-    bool put(const std::string_view& _columnFamily, const std::string_view& key,
+    Error::Ptr put(const std::string_view& _columnFamily, const std::string_view& key,
         const std::string_view& value) override;
-    std::string get(const std::string_view& _columnFamily, const std::string_view& key) override;
-    bool remove(const std::string_view& _columnFamily, const std::string_view& _key) override;
+    std::pair<std::string, Error::Ptr> get(const std::string_view& _columnFamily, const std::string_view& key) override;
+    Error::Ptr remove(const std::string_view& _columnFamily, const std::string_view& _key) override;
     void asyncPut(std::shared_ptr<std::string> _columnFamily, std::shared_ptr<std::string> _key,
-        std::shared_ptr<std::string> value, std::function<void(Error::Ptr)> _callback) override;
+        std::shared_ptr<bytes> value, std::function<void(Error::Ptr)> _callback) override;
     void asyncGet(std::shared_ptr<std::string> _columnFamily, std::shared_ptr<std::string> _key,
         std::function<void(Error::Ptr, const std::string& value)> _callback) override;
     void asyncRemove(std::shared_ptr<std::string> _columnFamily, std::shared_ptr<std::string> _key,

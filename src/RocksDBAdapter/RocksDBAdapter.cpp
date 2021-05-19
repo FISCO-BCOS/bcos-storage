@@ -251,7 +251,8 @@ std::map<std::string, std::shared_ptr<Entry>> RocksDBAdapter::getRows(
     return ret;
 }
 
-size_t RocksDBAdapter::commitTables(const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
+std::pair<size_t, Error::Ptr> RocksDBAdapter::commitTables(
+    const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
     std::vector<std::shared_ptr<std::map<std::string, std::shared_ptr<Entry>>>>& _tableDatas)
 {
     atomic<size_t> total = 0;
@@ -259,7 +260,8 @@ size_t RocksDBAdapter::commitTables(const std::vector<std::shared_ptr<TableInfo>
     {  // panic
         STORAGE_LOG(ERROR) << LOG_BADGE("RocksDBAdapter")
                            << LOG_DESC("commitTables info and data size mismatch");
-        return 0;
+        return {
+            0, make_shared<Error>(StorageErrorCode::InvalidArgument, "parameters size mismatch")};
     }
     assert(_tableInfos.size() == _tableDatas.size());
 
@@ -287,8 +289,12 @@ size_t RocksDBAdapter::commitTables(const std::vector<std::shared_ptr<TableInfo>
                             std::unique_lock lock(m_tableIDCacheMutex);
                             m_tableIDCache[realKey] = tablePerfix;
                         }
-                        // put new tableID to write batch
-                        writeBatch.Put(m_metadataCF, Slice(realKey), Slice(tablePerfix));
+                        {
+                            // put new tableID to write batch
+                            // the lock is of the storage doesn't promiss SYS_TABLE is unique
+                            tbb::spin_mutex::scoped_lock lock(batchMutex);
+                            writeBatch.Put(m_metadataCF, Slice(realKey), Slice(tablePerfix));
+                        }
 #if 0
                         STORAGE_LOG(TRACE)
                             << LOG_BADGE("RocksDBAdapter new table")
@@ -361,7 +367,7 @@ size_t RocksDBAdapter::commitTables(const std::vector<std::shared_ptr<TableInfo>
     {  // panic
         STORAGE_LOG(ERROR) << LOG_BADGE("RocksDBAdapter commitTables failed")
                            << LOG_KV("message", status.ToString());
-        return 0;
+        return {0, make_shared<Error>(StorageErrorCode::DataBaseUnavailable, status.ToString())};
     }
 
     STORAGE_LOG(INFO) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("commitTables")
@@ -370,7 +376,7 @@ size_t RocksDBAdapter::commitTables(const std::vector<std::shared_ptr<TableInfo>
                       << LOG_KV("encodeTimeCost", serialization_time_cost - assignID_time_cost)
                       << LOG_KV("writeDBTimeCost", utcTime() - serialization_time_cost)
                       << LOG_KV("totalTimeCost", utcTime() - start_time);
-    return total.load();
+    return {total.load(), nullptr};
 }
 
 }  // namespace storage

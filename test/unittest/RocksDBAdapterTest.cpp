@@ -68,7 +68,7 @@ BOOST_AUTO_TEST_CASE(commitTables)
     auto datas = vector<shared_ptr<map<string, Entry::Ptr>>>();
     infos.push_back(testTableInfo);
     auto ret = adapter->commitTables(infos, datas);
-    BOOST_TEST(ret == 0);
+    BOOST_TEST(ret.first == 0);
 
     auto tableData = make_shared<map<string, Entry::Ptr>>();
 
@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(commitTables)
 
     datas.push_back(sysTableData);
     ret = adapter->commitTables(infos, datas);
-    BOOST_TEST(ret == count + 1); // sys table
+    BOOST_TEST(ret.first == count + 1); // sys table
 
     for (size_t i = 0; i < count; ++i)
     {

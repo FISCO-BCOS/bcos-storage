@@ -84,7 +84,7 @@ BOOST_AUTO_TEST_CASE(commitTables)
     auto datas = vector<shared_ptr<map<string, Entry::Ptr>>>();
     infos.push_back(testTableInfo);
     auto ret = storage->commitBlock(blockNumber++, infos, datas);
-    BOOST_TEST(ret == 0);
+    BOOST_TEST(ret.first == 0);
 
     auto tableData = make_shared<map<string, Entry::Ptr>>();
 
@@ -105,8 +105,11 @@ BOOST_AUTO_TEST_CASE(commitTables)
     (*tableData)[to_string(count + 1)] = entry;
 
     datas.push_back(tableData);
+    auto hashImpl = std::make_shared<Sm3Hash>();
+    auto tableFactory = make_shared<TableFactory>(storage, hashImpl, blockNumber);
+    storage->addStateCache(blockNumber, tableFactory);
     ret = storage->commitBlock(blockNumber++, infos, datas);
-    BOOST_TEST(ret == count);
+    BOOST_TEST(ret.first == count);
 
     for (size_t i = 0; i < count; ++i)
     {
@@ -144,7 +147,7 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
     auto datas = vector<shared_ptr<map<string, Entry::Ptr>>>();
     infos.push_back(testTableInfo);
     auto ret = storage->commitBlock(blockNumber++, infos, datas);
-    BOOST_TEST(ret == 0);
+    BOOST_TEST(ret.first == 0);
 
     auto tableData = make_shared<map<string, Entry::Ptr>>();
 
@@ -165,8 +168,11 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
     (*tableData)[to_string(count + 1)] = entry;
 
     datas.push_back(tableData);
+    auto hashImpl = std::make_shared<Sm3Hash>();
+    auto tableFactory = make_shared<TableFactory>(storage, hashImpl, blockNumber);
+    storage->addStateCache(blockNumber, tableFactory);
     ret = storage->commitBlock(blockNumber++, infos, datas);
-    BOOST_TEST(ret == count);
+    BOOST_TEST(ret.first == count);
     // add ut for asyncGetPrimaryKeys
     struct Callback : public std::enable_shared_from_this<Callback>
     {
@@ -299,7 +305,7 @@ BOOST_AUTO_TEST_CASE(TableFactory_cache)
     auto datas = vector<shared_ptr<map<string, Entry::Ptr>>>();
     infos.push_back(testTableInfo);
     auto ret = storage->commitBlock(blockNumber++, infos, datas);
-    BOOST_TEST(ret == 0);
+    BOOST_TEST(ret.first == 0);
 
     auto tableData = make_shared<map<string, Entry::Ptr>>();
 
@@ -320,12 +326,15 @@ BOOST_AUTO_TEST_CASE(TableFactory_cache)
     (*tableData)[to_string(count + 1)] = entry;
 
     datas.push_back(tableData);
+    auto hashImpl = std::make_shared<Sm3Hash>();
+    auto tableFactory = make_shared<TableFactory>(storage, hashImpl, blockNumber);
+    storage->addStateCache(blockNumber, tableFactory);
     ret = storage->commitBlock(blockNumber++, infos, datas);
-    BOOST_TEST(ret == count);
+
+    BOOST_TEST(ret.first == count);
     // add ut for addStateCache
     vector<protocol::PBBlock::Ptr> blocks;
     vector<TableFactory::Ptr> tfs;
-    auto hashImpl = std::make_shared<Sm3Hash>();
     auto signImpl = std::make_shared<SM2SignatureImpl>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signImpl, nullptr);
     auto blockHeaderFactory = std::make_shared<PBBlockHeaderFactory>(cryptoSuite);
@@ -337,7 +346,7 @@ BOOST_AUTO_TEST_CASE(TableFactory_cache)
         auto block =
             make_shared<protocol::PBBlock>(blockHeaderFactory, transactionFactory, receiptFactory);
         blocks.push_back(block);
-        auto tableFactory = make_shared<TableFactory>(storage, hashImpl, i);
+        tableFactory = make_shared<TableFactory>(storage, hashImpl, i);
         tfs.push_back(tableFactory);
         storage->addStateCache(i, tableFactory);
     }
@@ -382,7 +391,7 @@ BOOST_AUTO_TEST_CASE(KVInterfaces)
         auto key = to_string(i + 1);
         auto value = to_string(i + 2);
         auto ret = storage->put(column, key, value);
-        BOOST_TEST(ret == true);
+        BOOST_TEST(ret == nullptr);
     }
     for (size_t i = 0; i < count; ++i)
     {
@@ -390,7 +399,7 @@ BOOST_AUTO_TEST_CASE(KVInterfaces)
         auto key = to_string(i + 1);
         auto value = to_string(i + 2);
         auto retValue = storage->get(column, key);
-        BOOST_TEST(retValue == value);
+        BOOST_TEST(retValue.first == value);
     }
 
     struct Callback : public std::enable_shared_from_this<Callback>

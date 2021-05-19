@@ -39,10 +39,10 @@ public:
     using Ptr = std::shared_ptr<KVDBImpl>;
     explicit KVDBImpl(rocksdb::DB* _db);
     virtual ~KVDBImpl() = default;
-    bool put(const std::string_view& _columnFamily, const std::string_view& _key,
+    Error::Ptr put(const std::string_view& _columnFamily, const std::string_view& _key,
         const std::string_view& _value) override;
-    std::string get(const std::string_view& _columnFamily, const std::string_view& _key) override;
-    bool remove(const std::string_view& _columnFamily, const std::string_view& _key) override;
+    std::pair<std::string, Error::Ptr> get(const std::string_view& _columnFamily, const std::string_view& _key) override;
+    Error::Ptr remove(const std::string_view& _columnFamily, const std::string_view& _key) override;
     std::shared_ptr<std::vector<std::string> > multiGet(
         const std::string& _columnFamily, std::vector<std::string>& _keys) override;
 

@@ -52,7 +52,7 @@ public:
         std::shared_ptr<TableInfo> _tableInfo, const std::string_view& _key) override;
     std::map<std::string, std::shared_ptr<Entry>> getRows(
         std::shared_ptr<TableInfo> _tableInfo, const std::vector<std::string>& _keys) override;
-    size_t commitTables(const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
+    std::pair<size_t, Error::Ptr> commitTables(const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
         std::vector<std::shared_ptr<std::map<std::string, std::shared_ptr<Entry>>>>& _tableDatas)
         override;
 
