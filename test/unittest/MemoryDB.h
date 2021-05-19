@@ -79,7 +79,7 @@ public:
                 if (data[_tableInfo->name].count(std::string(key)))
                 {
                     if (data[_tableInfo->name][key]->getStatus() == Entry::Status::NORMAL)
-                    { // this if is unnecessary
+                    {  // this if is unnecessary
                         ret[key] = data[_tableInfo->name][key];
                     }
                 }
@@ -87,14 +87,15 @@ public:
         }
         return ret;
     }
-    size_t commitTables(const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
+    std::pair<size_t, Error::Ptr> commitTables(
+        const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
         std::vector<std::shared_ptr<std::map<std::string, std::shared_ptr<Entry>>>>& _tableDatas)
         override
     {
         size_t total = 0;
         if (_tableInfos.size() != _tableDatas.size())
         {
-            return 0;
+            return {0, nullptr};
         }
         std::lock_guard<std::mutex> lock(m_mutex);
         for (size_t i = 0; i < _tableInfos.size(); ++i)
@@ -108,7 +109,7 @@ public:
                 }
             }
         }
-        return total;
+        return {total, nullptr};
     }
 
 private:

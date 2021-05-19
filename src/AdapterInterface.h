@@ -39,7 +39,7 @@ public:
         std::shared_ptr<TableInfo> _tableInfo, const std::string_view& _key) = 0;
     virtual std::map<std::string, std::shared_ptr<Entry>> getRows(
         std::shared_ptr<TableInfo> _tableInfo, const std::vector<std::string>& _keys) = 0;
-    virtual size_t commitTables(const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
+    virtual std::pair<size_t, Error::Ptr> commitTables(const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
         std::vector<std::shared_ptr<std::map<std::string, std::shared_ptr<Entry>>>>&
             _tableDatas) = 0;
 };

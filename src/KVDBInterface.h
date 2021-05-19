@@ -24,6 +24,7 @@
 #include <string>
 #include <vector>
 #include <string_view>
+#include "bcos-framework/libutilities/Error.h"
 
 namespace bcos
 {
@@ -35,10 +36,10 @@ public:
     using Ptr = std::shared_ptr<KVDBInterface>;
     KVDBInterface() = default;
     virtual ~KVDBInterface() = default;
-    virtual bool put(const std::string_view& columnFamily, const std::string_view& key,
+    virtual Error::Ptr put(const std::string_view& columnFamily, const std::string_view& key,
         const std::string_view& value) = 0;
-    virtual bool remove(const std::string_view& _columnFamily, const std::string_view& _key) = 0;
-    virtual std::string get(const std::string_view& columnFamily, const std::string_view& key) = 0;
+    virtual Error::Ptr remove(const std::string_view& _columnFamily, const std::string_view& _key) = 0;
+    virtual std::pair<std::string, Error::Ptr> get(const std::string_view& columnFamily, const std::string_view& key) = 0;
     virtual std::shared_ptr<std::vector<std::string>> multiGet(
         const std::string& columnFamily, std::vector<std::string>& keys) = 0;
 };
