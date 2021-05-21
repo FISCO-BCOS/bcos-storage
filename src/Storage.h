@@ -35,61 +35,62 @@ class StorageImpl : public StorageInterface
 {
 public:
     using Ptr = std::shared_ptr<StorageImpl>;
-    explicit StorageImpl(std::shared_ptr<AdapterInterface> _stateDB,
-        std::shared_ptr<KVDBInterface> _kvDB, size_t _poolSize = 4);
+    explicit StorageImpl(const std::shared_ptr<AdapterInterface> _stateDB,
+        const std::shared_ptr<KVDBInterface> _kvDB, size_t _poolSize = 4);
     ~StorageImpl() {}
-    std::vector<std::string> getPrimaryKeys(std::shared_ptr<TableInfo> _tableInfo,
-        std::shared_ptr<Condition> _condition) const override;
-    std::shared_ptr<Entry> getRow(
-        std::shared_ptr<TableInfo> _tableInfo, const std::string_view& _key) override;
-    std::map<std::string, std::shared_ptr<Entry>> getRows(
-        std::shared_ptr<TableInfo> _tableInfo, const std::vector<std::string>& _keys) override;
+    std::vector<std::string> getPrimaryKeys(
+        const TableInfo::Ptr& _tableInfo, const Condition::Ptr& _condition) const override;
+    Entry::Ptr getRow(const TableInfo::Ptr& _tableInfo, const std::string_view& _key) override;
+    std::map<std::string, Entry::Ptr> getRows(
+        const TableInfo::Ptr& _tableInfo, const std::vector<std::string>& _keys) override;
     std::pair<size_t, Error::Ptr> commitBlock(protocol::BlockNumber _number,
-        const std::vector<std::shared_ptr<TableInfo>> _infos,
-        std::vector<std::shared_ptr<std::map<std::string, std::shared_ptr<Entry>>>>& _datas)
-        override;
+        const std::vector<TableInfo::Ptr>& _infos,
+        const std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>& _datas) override;
 
-    void asyncGetPrimaryKeys(std::shared_ptr<TableInfo> _tableInfo,
-        std::shared_ptr<Condition> _condition,
-        std::function<void(Error::Ptr, std::vector<std::string>)> _callback) override;
-    void asyncGetRow(std::shared_ptr<TableInfo> _tableInfo, std::shared_ptr<std::string> _key,
-        std::function<void(Error::Ptr, std::shared_ptr<Entry>)> _callback) override;
-    void asyncGetRows(std::shared_ptr<TableInfo> _tableInfo,
-        std::shared_ptr<std::vector<std::string>> _keys,
-        std::function<void(Error::Ptr, std::map<std::string, std::shared_ptr<Entry>>)> _callback)
+    void asyncGetPrimaryKeys(const TableInfo::Ptr& _tableInfo, const Condition::Ptr& _condition,
+        std::function<void(const Error::Ptr&, const std::vector<std::string>&)> _callback) override;
+    void asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::string_view& _key,
+        std::function<void(const Error::Ptr&, const Entry::Ptr&)> _callback) override;
+    void asyncGetRows(const TableInfo::Ptr& _tableInfo,
+        const std::shared_ptr<std::vector<std::string>>& _keys,
+        std::function<void(const Error::Ptr&, const std::map<std::string, Entry::Ptr>&)> _callback)
         override;
     void asyncCommitBlock(protocol::BlockNumber _blockNumber,
-        std::shared_ptr<std::vector<std::shared_ptr<TableInfo>>> _infos,
-        std::shared_ptr<std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>>& _datas,
-        std::function<void(Error::Ptr, size_t)> _callback) override;
+        const std::shared_ptr<std::vector<TableInfo::Ptr>>& _infos,
+        const std::shared_ptr<std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>>&
+            _datas,
+        std::function<void(const Error::Ptr&, size_t)> _callback) override;
 
     // cache TableFactory
     void asyncAddStateCache(protocol::BlockNumber _blockNumber,
-        std::shared_ptr<TableFactory> _tablefactory,
-        std::function<void(Error::Ptr)> _callback) override;
-    void asyncDropStateCache(
-        protocol::BlockNumber _blockNumber, std::function<void(Error::Ptr)> _callback) override;
+        const std::shared_ptr<TableFactoryInterface>& _tablefactory,
+        std::function<void(const Error::Ptr&)> _callback) override;
+    void asyncDropStateCache(protocol::BlockNumber _blockNumber,
+        std::function<void(const Error::Ptr&)> _callback) override;
     void asyncGetStateCache(protocol::BlockNumber _blockNumber,
-        std::function<void(Error::Ptr, std::shared_ptr<TableFactory>)> _callback) override;
-    std::shared_ptr<TableFactory> getStateCache(protocol::BlockNumber _blockNumber) override;
+        std::function<void(const Error::Ptr&, const std::shared_ptr<TableFactoryInterface>&)>
+            _callback) override;
+    std::shared_ptr<TableFactoryInterface> getStateCache(
+        protocol::BlockNumber _blockNumber) override;
     void dropStateCache(protocol::BlockNumber _blockNumber) override;
-    void addStateCache(
-        protocol::BlockNumber _blockNumber, std::shared_ptr<TableFactory> _tablefactory) override;
+    void addStateCache(protocol::BlockNumber _blockNumber,
+        const std::shared_ptr<TableFactoryInterface>& _tablefactory) override;
 
     // KV store in split database, used to store data off-chain
     Error::Ptr put(const std::string_view& _columnFamily, const std::string_view& key,
         const std::string_view& value) override;
-    std::pair<std::string, Error::Ptr> get(const std::string_view& _columnFamily, const std::string_view& key) override;
+    std::pair<std::string, Error::Ptr> get(
+        const std::string_view& _columnFamily, const std::string_view& key) override;
     Error::Ptr remove(const std::string_view& _columnFamily, const std::string_view& _key) override;
-    void asyncPut(std::shared_ptr<std::string> _columnFamily, std::shared_ptr<std::string> _key,
-        std::shared_ptr<bytes> value, std::function<void(Error::Ptr)> _callback) override;
-    void asyncGet(std::shared_ptr<std::string> _columnFamily, std::shared_ptr<std::string> _key,
-        std::function<void(Error::Ptr, const std::string& value)> _callback) override;
-    void asyncRemove(std::shared_ptr<std::string> _columnFamily, std::shared_ptr<std::string> _key,
-        std::function<void(Error::Ptr)> _callback) override;
-    void asyncGetBatch(std::shared_ptr<std::string> _columnFamily,
-        std::shared_ptr<std::vector<std::string>> _keys,
-        std::function<void(Error::Ptr, std::shared_ptr<std::vector<std::string>>)> _callback)
+    void asyncPut(const std::string_view& _columnFamily, const std::string_view& _key,
+        const std::string_view& value, std::function<void(const Error::Ptr&)> _callback) override;
+    void asyncGet(const std::string_view& _columnFamily, const std::string_view& _key,
+        std::function<void(const Error::Ptr&, const std::string& value)> _callback) override;
+    void asyncRemove(const std::string_view& _columnFamily, const std::string_view& _key,
+        std::function<void(const Error::Ptr&)> _callback) override;
+    void asyncGetBatch(const std::string_view& _columnFamily,
+        const std::shared_ptr<std::vector<std::string>>& _keys,
+        std::function<void(const Error::Ptr&, const std::shared_ptr<std::vector<std::string>>&)> _callback)
         override;
 
 protected:
@@ -97,7 +98,7 @@ protected:
     std::shared_ptr<KVDBInterface> m_kvDB = nullptr;
     std::shared_ptr<ThreadPool> m_threadPool = nullptr;
     mutable std::shared_mutex m_number2TableFactoryMutex;
-    std::map<protocol::BlockNumber, std::shared_ptr<TableFactory>> m_number2TableFactory;
+    std::map<protocol::BlockNumber, std::shared_ptr<TableFactoryInterface>> m_number2TableFactory;
 };
 }  // namespace storage
 }  // namespace bcos

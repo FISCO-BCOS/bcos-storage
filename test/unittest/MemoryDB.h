@@ -34,7 +34,7 @@ public:
     virtual ~MemoryStorage() = default;
 
     std::vector<std::string> getPrimaryKeys(
-        std::shared_ptr<TableInfo> _tableInfo, std::shared_ptr<Condition> _condition) const override
+        const TableInfo::Ptr& _tableInfo, const Condition::Ptr& _condition) const override
     {
         std::vector<std::string> ret;
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -50,10 +50,10 @@ public:
         }
         return ret;
     }
-    std::shared_ptr<Entry> getRow(
-        std::shared_ptr<TableInfo> _tableInfo, const std::string_view& _key) override
+    Entry::Ptr getRow(
+        const TableInfo::Ptr& _tableInfo, const std::string_view& _key) override
     {
-        std::shared_ptr<Entry> ret = nullptr;
+        Entry::Ptr ret = nullptr;
         std::lock_guard<std::mutex> lock(m_mutex);
         if (data.count(_tableInfo->name))
         {
@@ -67,10 +67,10 @@ public:
         }
         return ret;
     }
-    std::map<std::string, std::shared_ptr<Entry>> getRows(
-        std::shared_ptr<TableInfo> _tableInfo, const std::vector<std::string>& _keys) override
+    std::map<std::string, Entry::Ptr> getRows(
+        const TableInfo::Ptr& _tableInfo, const std::vector<std::string>& _keys) override
     {
-        std::map<std::string, std::shared_ptr<Entry>> ret;
+        std::map<std::string, Entry::Ptr> ret;
         std::lock_guard<std::mutex> lock(m_mutex);
         if (data.count(_tableInfo->name))
         {
@@ -88,8 +88,8 @@ public:
         return ret;
     }
     std::pair<size_t, Error::Ptr> commitTables(
-        const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
-        std::vector<std::shared_ptr<std::map<std::string, std::shared_ptr<Entry>>>>& _tableDatas)
+        const std::vector<std::shared_ptr<TableInfo>>& _tableInfos,
+        const std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>& _tableDatas)
         override
     {
         size_t total = 0;
