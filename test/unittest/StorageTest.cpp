@@ -184,7 +184,7 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
             mutex.lock();
         }
 
-        void onResult(Error::Ptr _error, std::vector<std::string> _result)
+        void onResult(const Error::Ptr& _error, const std::vector<std::string>& _result)
         {
             BOOST_TEST(_error->errorCode() == 0);
             // include [6, 7, 8, 9]
@@ -207,7 +207,7 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
     };
     size_t min = 50;
     Callback::Ptr callback = std::make_shared<Callback>(min, 54);
-    std::function<void(Error::Ptr, std::vector<std::string>)> fp =
+    std::function<void(const Error::Ptr&, const std::vector<std::string>&)> fp =
         std::bind(&Callback::onResult, callback, std::placeholders::_1, std::placeholders::_2);
     auto condition = make_shared<Condition>();
     condition->GE(to_string(min));
@@ -230,13 +230,13 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
         typedef std::shared_ptr<Callback2> Ptr;
         explicit Callback2(shared_ptr<vector<string>> _keys) : keys(_keys) { mutex.lock(); }
 
-        void onResult(Error::Ptr _error, std::map<std::string, std::shared_ptr<Entry>> _result)
+        void onResult(const Error::Ptr& _error, const std::map<std::string, Entry::Ptr>& _result)
         {
             BOOST_TEST(_error->errorCode() == 0);
             BOOST_TEST(_result.size() == keys->size());
             for (size_t i = 0; i < keys->size(); ++i)
             {
-                auto entry = _result[keys->at(i)];
+                auto entry = _result.at(keys->at(i));
                 BOOST_TEST(entry != nullptr);
                 // BOOST_TEST(entry->getField(testTableKey) == to_string(i));
                 BOOST_TEST(entry->getField("value1") == to_string(i + 1));
@@ -257,7 +257,7 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
     }
 
     Callback2::Ptr callback2 = std::make_shared<Callback2>(keys);
-    std::function<void(Error::Ptr, std::map<std::string, std::shared_ptr<Entry>>)> fp2 =
+    std::function<void(const Error::Ptr&, const std::map<std::string, Entry::Ptr>&)> fp2 =
         std::bind(&Callback2::onResult, callback2, std::placeholders::_1, std::placeholders::_2);
     storage->asyncGetRows(testTableInfo, keys, fp2);
     // lock to wait for async send
@@ -270,7 +270,7 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
         typedef std::shared_ptr<Callback3> Ptr;
         explicit Callback3(size_t _key) : key(_key) { mutex.lock(); }
 
-        void onResult(Error::Ptr _error, std::shared_ptr<Entry> _result)
+        void onResult(const Error::Ptr& _error, const Entry::Ptr& _result)
         {
             BOOST_TEST(_error->errorCode() == 0);
             BOOST_TEST(_result != nullptr);
@@ -285,9 +285,9 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
         size_t key = 0;
         std::mutex mutex;
     };
-    auto key = make_shared<string>("56");
+    auto key = string("56");
     Callback3::Ptr callback3 = std::make_shared<Callback3>(56);
-    std::function<void(Error::Ptr, std::shared_ptr<Entry>)> fp3 =
+    std::function<void(const Error::Ptr&, const Entry::Ptr&)> fp3 =
         std::bind(&Callback3::onResult, callback3, std::placeholders::_1, std::placeholders::_2);
     storage->asyncGetRow(testTableInfo, key, fp3);
     // lock to wait for async send
@@ -409,7 +409,8 @@ BOOST_AUTO_TEST_CASE(KVInterfaces)
 
         explicit Callback(size_t _value) : value(_value) { mutex.lock(); }
 
-        void onResult(Error::Ptr _error, std::shared_ptr<std::vector<std::string>> _result)
+        void onResult(
+            const Error::Ptr& _error, const std::shared_ptr<std::vector<std::string>>& _result)
         {
             BOOST_TEST(_error->errorCode() == 0);
             BOOST_TEST(_result->size() == 1);
@@ -429,9 +430,10 @@ BOOST_AUTO_TEST_CASE(KVInterfaces)
         auto pkeys = make_shared<vector<string>>();
         pkeys->push_back(key);
         Callback::Ptr callback = std::make_shared<Callback>(i + 2);
-        std::function<void(Error::Ptr, std::shared_ptr<std::vector<std::string>>)> fp =
-            std::bind(&Callback::onResult, callback, std::placeholders::_1, std::placeholders::_2);
-        storage->asyncGetBatch(make_shared<string>(column), pkeys, fp);
+        std::function<void(const Error::Ptr&, const std::shared_ptr<std::vector<std::string>>&)>
+            fp = std::bind(
+                &Callback::onResult, callback, std::placeholders::_1, std::placeholders::_2);
+        storage->asyncGetBatch(column, pkeys, fp);
         // lock to wait for async send
         callback->mutex.lock();
         callback->mutex.unlock();

@@ -46,22 +46,22 @@ public:
     explicit RocksDBAdapter(rocksdb::DB* _db, rocksdb::ColumnFamilyHandle* handler);
     virtual ~RocksDBAdapter();
 
-    std::vector<std::string> getPrimaryKeys(std::shared_ptr<TableInfo> _tableInfo,
-        std::shared_ptr<Condition> _condition) const override;
-    std::shared_ptr<Entry> getRow(
-        std::shared_ptr<TableInfo> _tableInfo, const std::string_view& _key) override;
-    std::map<std::string, std::shared_ptr<Entry>> getRows(
-        std::shared_ptr<TableInfo> _tableInfo, const std::vector<std::string>& _keys) override;
-    std::pair<size_t, Error::Ptr> commitTables(const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
-        std::vector<std::shared_ptr<std::map<std::string, std::shared_ptr<Entry>>>>& _tableDatas)
+    std::vector<std::string> getPrimaryKeys(const TableInfo::Ptr& _tableInfo,
+        const Condition::Ptr& _condition) const override;
+    Entry::Ptr getRow(
+        const TableInfo::Ptr& _tableInfo, const std::string_view& _key) override;
+    std::map<std::string, Entry::Ptr> getRows(
+        const TableInfo::Ptr& _tableInfo, const std::vector<std::string>& _keys) override;
+    std::pair<size_t, Error::Ptr> commitTables(const std::vector<std::shared_ptr<TableInfo>>& _tableInfos,
+        const std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>& _tableDatas)
         override;
 
 private:
     inline std::pair<std::string, bool> getTablePerfix(const std::string& _tableName) const;
     inline int64_t getNextTableID();
 
-    inline std::shared_ptr<Entry> vectorToEntry(
-        std::shared_ptr<TableInfo>& _tableInfo, std::vector<std::string>& _values) const
+    inline Entry::Ptr vectorToEntry(
+        const TableInfo::Ptr& _tableInfo, std::vector<std::string>& _values) const
     {
         if (_tableInfo->fields.size() != _values.size() - 3)
         {  // panic, 3 means [key, status, num]

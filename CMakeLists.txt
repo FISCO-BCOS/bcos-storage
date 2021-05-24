@@ -53,7 +53,6 @@ include(CompilerSettings)
 # install bcos-framework
 include(InstallBcosFrameworkDependencies)
 
-# import tars project
 set(STORAGE_TARGET "bcos-storage")
 add_subdirectory(src)
 if (TESTS)

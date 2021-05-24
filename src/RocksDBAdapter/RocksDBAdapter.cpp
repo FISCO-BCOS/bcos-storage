@@ -124,7 +124,7 @@ int64_t RocksDBAdapter::getNextTableID()
 }
 
 std::vector<std::string> RocksDBAdapter::getPrimaryKeys(
-    std::shared_ptr<TableInfo> _tableInfo, std::shared_ptr<Condition> _condition) const
+    const TableInfo::Ptr& _tableInfo, const Condition::Ptr& _condition) const
 {
     vector<string> ret;
     // get TableID according tableName,
@@ -154,8 +154,8 @@ std::vector<std::string> RocksDBAdapter::getPrimaryKeys(
     return ret;
 }
 
-std::shared_ptr<Entry> RocksDBAdapter::getRow(
-    std::shared_ptr<TableInfo> _tableInfo, const std::string_view& _key)
+Entry::Ptr RocksDBAdapter::getRow(
+    const TableInfo::Ptr& _tableInfo, const std::string_view& _key)
 {
     // get TableID according tableName,
     auto perfixPair = getTablePerfix(_tableInfo->name);
@@ -183,10 +183,10 @@ std::shared_ptr<Entry> RocksDBAdapter::getRow(
     return vectorToEntry(_tableInfo, res);
 }
 
-std::map<std::string, std::shared_ptr<Entry>> RocksDBAdapter::getRows(
-    std::shared_ptr<TableInfo> _tableInfo, const std::vector<std::string>& _keys)
+std::map<std::string, Entry::Ptr> RocksDBAdapter::getRows(
+    const TableInfo::Ptr& _tableInfo, const std::vector<std::string>& _keys)
 {
-    std::map<std::string, std::shared_ptr<Entry>> ret;
+    std::map<std::string, Entry::Ptr> ret;
     if (_keys.empty())
     {
         return ret;
@@ -252,8 +252,8 @@ std::map<std::string, std::shared_ptr<Entry>> RocksDBAdapter::getRows(
 }
 
 std::pair<size_t, Error::Ptr> RocksDBAdapter::commitTables(
-    const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
-    std::vector<std::shared_ptr<std::map<std::string, std::shared_ptr<Entry>>>>& _tableDatas)
+    const std::vector<std::shared_ptr<TableInfo>>& _tableInfos,
+    const std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>& _tableDatas)
 {
     atomic<size_t> total = 0;
     if (_tableInfos.size() != _tableDatas.size())
