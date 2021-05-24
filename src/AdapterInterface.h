@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "bcos-framework/interfaces/storage/Common.h"
-#include "libutilities/Error.h"
+#include "bcos-framework/libutilities/Error.h"
 #include <functional>
 
 namespace bcos
