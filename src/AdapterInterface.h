@@ -34,13 +34,13 @@ public:
     AdapterInterface() = default;
     virtual ~AdapterInterface() {}
     virtual std::vector<std::string> getPrimaryKeys(
-        std::shared_ptr<TableInfo> _tableInfo, std::shared_ptr<Condition> _condition) const = 0;
-    virtual std::shared_ptr<Entry> getRow(
-        std::shared_ptr<TableInfo> _tableInfo, const std::string_view& _key) = 0;
-    virtual std::map<std::string, std::shared_ptr<Entry>> getRows(
-        std::shared_ptr<TableInfo> _tableInfo, const std::vector<std::string>& _keys) = 0;
-    virtual std::pair<size_t, Error::Ptr> commitTables(const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
-        std::vector<std::shared_ptr<std::map<std::string, std::shared_ptr<Entry>>>>&
+        const TableInfo::Ptr& _tableInfo, const Condition::Ptr& _condition) const = 0;
+    virtual Entry::Ptr getRow(
+        const TableInfo::Ptr& _tableInfo, const std::string_view& _key) = 0;
+    virtual std::map<std::string, Entry::Ptr> getRows(
+        const TableInfo::Ptr& _tableInfo, const std::vector<std::string>& _keys) = 0;
+    virtual std::pair<size_t, Error::Ptr> commitTables(const std::vector<std::shared_ptr<TableInfo>>& _tableInfos,
+        const std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>&
             _tableDatas) = 0;
 };
 
