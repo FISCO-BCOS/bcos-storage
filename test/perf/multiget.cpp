@@ -19,6 +19,7 @@
  * @date 2020-03-18
  */
 
+#include "KVDBImpl.h"
 #include "RocksDBAdapter/RocksDBAdapter.h"
 #include "RocksDBAdapter/RocksDBAdapterFactory.h"
 #include "boost/filesystem.hpp"
@@ -157,10 +158,27 @@ int main(int argc, const char* argv[])
     {
         value[i] = '0' + rand() % 10;
     }
-    performance("RocksDB set", count, [&]() { insert(value, count); });
+    performance("RocksDB batch set", count, [&]() { insert(value, count); });
     performance("RocksDB get", count, [&]() { get(); });
     performance("RocksDB multi get", count, [&]() { multiGet(); });
 
+    ret = factory->createRocksDB("kv", 0);
+    auto kvDB = make_shared<KVDBImpl>(ret.first);
+    auto kvSet = [&](const string& value, int count) {
+        for (int i = 0; i < count; ++i)
+        {
+            kvDB->put("default", rocksKeys[i], value);
+        }
+    };
+
+    auto kvGet = [&]() {
+        for (auto& key : rocksKeys)
+        {
+            kvDB->get("default", key);
+        }
+    };
+    performance("KV single put", count, [&]() { kvSet(value, count); });
+    performance("KV get", count, [&]() { kvGet(); });
     string bigValueKey("bigValue");
     string bigValue;
     for (int i = 0; i < count; ++i)

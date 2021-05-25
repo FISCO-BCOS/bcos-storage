@@ -34,41 +34,39 @@ namespace storage
 {
 KVDBImpl::KVDBImpl(rocksdb::DB* _db) : m_db(_db) {}
 
-Error::Ptr KVDBImpl::put(const std::string_view& columnFamily, const std::string_view& key,
-    const std::string_view& value)
+Error::Ptr KVDBImpl::put(const std::string_view& _columnFamily, const std::string_view& _key,
+    const std::string_view& _value)
 {
-    string realeKey = string(columnFamily) + "_" + string(key);
+    string realeKey = string(_columnFamily).append("_").append(_key);
     auto status = m_db->Put(
-        WriteOptions(), Slice(realeKey.data(), realeKey.size()), Slice(value.data(), value.size()));
+        WriteOptions(), Slice(realeKey.data(), realeKey.size()), Slice(_value.data(), _value.size()));
     if (!status.ok())
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("KVDBImpl put failed") << LOG_KV("key", key)
+        STORAGE_LOG(ERROR) << LOG_BADGE("KVDBImpl put failed") << LOG_KV("key", _key)
                            << LOG_KV("message", status.ToString());
-        return make_shared<Error>(
-            StorageErrorCode::DataBaseUnavailable, status.ToString());
+        return make_shared<Error>(StorageErrorCode::DataBaseUnavailable, status.ToString());
     }
     return nullptr;
 }
 
 std::pair<std::string, Error::Ptr> KVDBImpl::get(
-    const std::string_view& columnFamily, const std::string_view& key)
+    const std::string_view& _columnFamily, const std::string_view& _key)
 {
     string value;
-    string realeKey = string(columnFamily) + "_" + string(key);
+    string realeKey = string(_columnFamily).append("_").append(_key);
     auto status = m_db->Get(ReadOptions(), Slice(realeKey.data(), realeKey.size()), &value);
     if (!status.ok())
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("KVDBImpl get failed") << LOG_KV("key", key)
+        STORAGE_LOG(ERROR) << LOG_BADGE("KVDBImpl get failed") << LOG_KV("key", _key)
                            << LOG_KV("message", status.ToString());
         if (status.IsNotFound())
         {
-            return {
-                "", make_shared<Error>(StorageErrorCode::NotFound, status.ToString())};
+            return {"", make_shared<Error>(StorageErrorCode::NotFound, status.ToString())};
         }
         else
         {
-            return {"", make_shared<Error>(
-                            StorageErrorCode::DataBaseUnavailable, status.ToString())};
+            return {
+                "", make_shared<Error>(StorageErrorCode::DataBaseUnavailable, status.ToString())};
         }
     }
     return {value, nullptr};
@@ -82,8 +80,7 @@ Error::Ptr KVDBImpl::remove(const std::string_view& _columnFamily, const std::st
     {
         STORAGE_LOG(ERROR) << LOG_BADGE("KVDBImpl remove failed") << LOG_KV("key", _key)
                            << LOG_KV("message", status.ToString());
-        return make_shared<Error>(
-            StorageErrorCode::DataBaseUnavailable, status.ToString());
+        return make_shared<Error>(StorageErrorCode::DataBaseUnavailable, status.ToString());
     }
     return nullptr;
 }
