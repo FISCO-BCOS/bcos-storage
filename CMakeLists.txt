@@ -43,12 +43,15 @@ HunterGate(
 cmake_policy(VERSION 3.12)
 cmake_policy(SET CMP0074 NEW)
 
-project(bcos-storage)
+project(bcos-storage VERSION "3.0.0")
 
 # basic setting
 include(Options)
 configure_project()
 include(CompilerSettings)
+include(InstallConfig)
+hunter_add_package(zstd)
+find_package(zstd CONFIG REQUIRED)
 
 # install bcos-framework
 include(InstallBcosFrameworkDependencies)

@@ -254,7 +254,7 @@ int main(int argc, const char* argv[])
     performance("Table set", keys, [&]() { insert("table", value, keys); });
     performance("Table get", keys, [&]() { select("table", keys); });
     performance("Table traverse", keys, [&]() { traverse("table", keys); });
-    // performance("Table remove", keys, [&]() { remove(testTableName, keys); });
+    performance("Table remove", keys, [&]() { remove(testTableName, keys); });
 
     string bigValue;
     for (int i = 0; i < keys; ++i)
