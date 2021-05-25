@@ -289,10 +289,11 @@ void StorageImpl::asyncPut(const string_view& _columnFamily, const string_view& 
             auto ret = kvDB->put(columnFamily, key, value);
             if (ret)
             {
-                _callback(make_shared<Error>());
+                _callback(ret);
             }
             else
             {
+                _callback(nullptr);
             }
         }
         else
