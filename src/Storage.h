@@ -90,8 +90,9 @@ public:
         std::function<void(const Error::Ptr&)> _callback) override;
     void asyncGetBatch(const std::string_view& _columnFamily,
         const std::shared_ptr<std::vector<std::string>>& _keys,
-        std::function<void(const Error::Ptr&, const std::shared_ptr<std::vector<std::string>>&)> _callback)
-        override;
+        std::function<void(const Error::Ptr&, const std::shared_ptr<std::vector<std::string>>&)>
+            _callback) override;
+    void stop() override;
 
 protected:
     std::shared_ptr<AdapterInterface> m_stateDB = nullptr;

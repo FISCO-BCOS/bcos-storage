@@ -28,8 +28,8 @@
 #include "bcos-framework/libprotocol/protobuf/PBTransactionFactory.h"
 #include "bcos-framework/libprotocol/protobuf/PBTransactionReceiptFactory.h"
 #include "bcos-framework/libtable/TableFactory.h"
-#include "bcos-framework/testutils/HashImpl.h"
-#include "bcos-framework/testutils/SignatureImpl.h"
+#include "bcos-framework/testutils/crypto/HashImpl.h"
+#include "bcos-framework/testutils/crypto/SignatureImpl.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/db.h"
 #include <boost/test/unit_test.hpp>
