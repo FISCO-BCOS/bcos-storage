@@ -24,7 +24,7 @@
 #include "RocksDBAdapter/RocksDBAdapterFactory.h"
 #include "Storage.h"
 #include "bcos-framework/libtable/TableFactory.h"
-#include "bcos-framework/testutils/HashImpl.h"
+#include "bcos-framework/testutils/crypto/HashImpl.h"
 #include "boost/filesystem.hpp"
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>

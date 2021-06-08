@@ -40,6 +40,11 @@ StorageImpl::StorageImpl(std::shared_ptr<AdapterInterface> _stateDB,
     m_threadPool = std::make_shared<bcos::ThreadPool>("asyncTasks", _poolSize);
 }
 
+void StorageImpl::stop()
+{
+    m_threadPool->stop();
+}
+
 std::vector<std::string> StorageImpl::getPrimaryKeys(
     const TableInfo::Ptr& _tableInfo, const Condition::Ptr& _condition) const
 {
