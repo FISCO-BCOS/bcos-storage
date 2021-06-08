@@ -63,23 +63,17 @@ std::pair<size_t, Error::Ptr> StorageImpl::commitBlock(protocol::BlockNumber _nu
 {
     // merge state cache then commit
     std::shared_ptr<TableFactoryInterface> stateTableFactory = nullptr;
-    if (_number != 0)
+    std::shared_lock lock(m_number2TableFactoryMutex);
+    if (m_number2TableFactory.count(_number))
     {
-        std::shared_lock lock(m_number2TableFactoryMutex);
-        if (m_number2TableFactory.count(_number))
-        {
-            stateTableFactory = m_number2TableFactory[_number];
-        }
-        else
-        {
-            return {0, make_shared<Error>(StorageErrorCode::StateCacheNotFound,
-                           to_string(_number) + "state cache not found")};
-        }
+        stateTableFactory = m_number2TableFactory.at(_number);
         auto stateData = stateTableFactory->exportData();
         stateData.first.insert(stateData.first.end(), _infos.begin(), _infos.end());
         stateData.second.insert(stateData.second.end(), _datas.begin(), _datas.end());
+        // FIXME: drop state cache, when commite succeed
         return m_stateDB->commitTables(stateData.first, stateData.second);
     }
+    // empty block has not state and consensus will commit empty block
     return m_stateDB->commitTables(_infos, _datas);
 }
 
