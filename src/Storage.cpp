@@ -93,7 +93,7 @@ void StorageImpl::asyncGetPrimaryKeys(const TableInfo::Ptr& _tableInfo,
         if (storage)
         {
             auto ret = storage->getPrimaryKeys(_tableInfo, _condition);
-            _callback(make_shared<Error>(), ret);
+            _callback(nullptr, ret);
         }
         else
         {
@@ -114,7 +114,7 @@ void StorageImpl::asyncGetRow(const TableInfo::Ptr& _tableInfo, const string_vie
         if (storage)
         {
             auto ret = storage->getRow(_tableInfo, key);
-            _callback(make_shared<Error>(), ret);
+            _callback(nullptr, ret);
         }
         else
         {
@@ -136,7 +136,7 @@ void StorageImpl::asyncGetRows(const TableInfo::Ptr& _tableInfo,
         if (storage)
         {
             auto ret = storage->getRows(_tableInfo, *_keys);
-            _callback(make_shared<Error>(), ret);
+            _callback(nullptr, ret);
         }
         else
         {
@@ -183,7 +183,7 @@ void StorageImpl::asyncAddStateCache(protocol::BlockNumber _blockNumber,
         if (storage)
         {
             storage->addStateCache(_blockNumber, _tablefactory);
-            _callback(make_shared<Error>());
+            _callback(nullptr);
         }
         else
         {
@@ -204,7 +204,7 @@ void StorageImpl::asyncDropStateCache(
         if (storage)
         {
             storage->dropStateCache(_blockNumber);
-            _callback(make_shared<Error>());
+            _callback(nullptr);
         }
         else
         {
@@ -225,7 +225,7 @@ void StorageImpl::asyncGetStateCache(protocol::BlockNumber _blockNumber,
         if (storage)
         {
             auto ret = storage->getStateCache(_blockNumber);
-            _callback(make_shared<Error>(), ret);
+            _callback(nullptr, ret);
         }
         else
         {
@@ -336,7 +336,7 @@ void StorageImpl::asyncRemove(const string_view& _columnFamily, const string_vie
                 auto ret = kvDB->remove(columnFamily, key);
                 if (ret)
                 {
-                    _callback(make_shared<Error>());
+                    _callback(nullptr);
                 }
                 else
                 {
@@ -361,7 +361,7 @@ void StorageImpl::asyncGetBatch(const string_view& _columnFamily,
         if (kvDB)
         {
             auto values = kvDB->multiGet(columnFamily, *_keys);
-            _callback(make_shared<Error>(), values);
+            _callback(nullptr, values);
         }
         else
         {

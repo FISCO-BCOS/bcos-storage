@@ -186,7 +186,7 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
 
         void onResult(const Error::Ptr& _error, const std::vector<std::string>& _result)
         {
-            BOOST_TEST(_error->errorCode() == 0);
+            BOOST_TEST(_error == nullptr);
             // include [6, 7, 8, 9]
             BOOST_TEST(_result.size() == total);
             auto valueStr = to_string(value);
@@ -232,7 +232,7 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
 
         void onResult(const Error::Ptr& _error, const std::map<std::string, Entry::Ptr>& _result)
         {
-            BOOST_TEST(_error->errorCode() == 0);
+            BOOST_TEST(_error == nullptr);
             BOOST_TEST(_result.size() == keys->size());
             for (size_t i = 0; i < keys->size(); ++i)
             {
@@ -272,7 +272,7 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
 
         void onResult(const Error::Ptr& _error, const Entry::Ptr& _result)
         {
-            BOOST_TEST(_error->errorCode() == 0);
+            BOOST_TEST(_error == nullptr);
             BOOST_TEST(_result != nullptr);
             // BOOST_TEST(_result->getField(testTableKey) == to_string(i));
             BOOST_TEST(_result->getField("value1") == to_string(key + 1));
@@ -412,7 +412,7 @@ BOOST_AUTO_TEST_CASE(KVInterfaces)
         void onResult(
             const Error::Ptr& _error, const std::shared_ptr<std::vector<std::string>>& _result)
         {
-            BOOST_TEST(_error->errorCode() == 0);
+            BOOST_TEST(_error == nullptr);
             BOOST_TEST(_result->size() == 1);
             auto originValue = to_string(value);
             auto retValue = (*_result)[0];
