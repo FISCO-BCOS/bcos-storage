@@ -66,6 +66,8 @@ std::pair<size_t, Error::Ptr> StorageImpl::commitBlock(protocol::BlockNumber _nu
     const std::vector<TableInfo::Ptr>& _infos,
     const std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>& _datas)
 {
+    STORAGE_LOG(INFO) << LOG_BADGE("StorageImpl") << LOG_DESC("commitBlock")
+                       << LOG_KV("block", _number);
     // merge state cache then commit
     std::shared_ptr<TableFactoryInterface> stateTableFactory = nullptr;
     std::shared_lock lock(m_number2TableFactoryMutex);
