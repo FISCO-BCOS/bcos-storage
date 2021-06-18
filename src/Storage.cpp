@@ -67,21 +67,36 @@ std::pair<size_t, Error::Ptr> StorageImpl::commitBlock(protocol::BlockNumber _nu
     const std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>& _datas)
 {
     STORAGE_LOG(INFO) << LOG_BADGE("StorageImpl") << LOG_DESC("commitBlock")
-                       << LOG_KV("block", _number);
+                      << LOG_KV("block", _number);
     // merge state cache then commit
     std::shared_ptr<TableFactoryInterface> stateTableFactory = nullptr;
-    std::shared_lock lock(m_number2TableFactoryMutex);
-    if (m_number2TableFactory.count(_number))
     {
-        stateTableFactory = m_number2TableFactory.at(_number);
+        std::shared_lock lock(m_number2TableFactoryMutex);
+        if (m_number2TableFactory.count(_number))
+        {
+            stateTableFactory = m_number2TableFactory.at(_number);
+        }
+    }
+    if (stateTableFactory)
+    {
         auto stateData = stateTableFactory->exportData();
         stateData.first.insert(stateData.first.end(), _infos.begin(), _infos.end());
         stateData.second.insert(stateData.second.end(), _datas.begin(), _datas.end());
-        // FIXME: drop state cache, when commite succeed
-        return m_stateDB->commitTables(stateData.first, stateData.second);
+
+        auto ret = m_stateDB->commitTables(stateData.first, stateData.second);
+        if (!ret.second)
+        {  // drop state cache, when commite succeed
+            dropStateCache(_number);
+        }
+        return ret;
     }
     // empty block has not state and consensus will commit empty block
-    return m_stateDB->commitTables(_infos, _datas);
+    auto ret = m_stateDB->commitTables(_infos, _datas);
+    if (!ret.second)
+    {  // drop state cache, when commite succeed
+        dropStateCache(_number);
+    }
+    return ret;
 }
 
 void StorageImpl::asyncGetPrimaryKeys(const TableInfo::Ptr& _tableInfo,
