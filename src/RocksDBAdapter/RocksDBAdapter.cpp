@@ -171,7 +171,7 @@ Entry::Ptr RocksDBAdapter::getRow(
     {
         STORAGE_LOG(DEBUG) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("getRow failed")
                            << LOG_KV("name", _tableInfo->name) << LOG_KV("key", _key)
-                           << LOG_KV("message", status.ToString()) << LOG_KV("realKey", realKey);
+                           << LOG_KV("message", status.ToString());
         return nullptr;
     }
     // deserialization the value to vector
@@ -239,8 +239,7 @@ std::map<std::string, Entry::Ptr> RocksDBAdapter::getRows(
                     STORAGE_LOG(ERROR)
                         << LOG_BADGE("RocksDBAdapter getRows error")
                         << LOG_KV("name", _tableInfo->name) << LOG_KV("key", _keys[it])
-                        << LOG_KV("message", status[it].ToString())
-                        << LOG_KV("realKey", keys[it].ToString());
+                        << LOG_KV("message", status[it].ToString());
                     {
                         std::lock_guard<std::mutex> lock(retMutex);
                         ret.insert(std::make_pair(_keys[it], nullptr));
@@ -300,7 +299,7 @@ std::pair<size_t, Error::Ptr> RocksDBAdapter::commitTables(
                             << LOG_BADGE("RocksDBAdapter new table")
                             << LOG_KV("name", tableInfo->name) << LOG_KV("id", tableID)
                             << LOG_KV("tablePerfix size", tablePerfix.size())
-                            << LOG_KV("realKey", realKey);
+                            << LOG_KV("key", item.first);
 #endif
                     }
                 }
