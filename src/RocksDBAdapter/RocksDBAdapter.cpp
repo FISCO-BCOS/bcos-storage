@@ -31,6 +31,7 @@
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 #include "tbb/parallel_for.h"
+#include "tbb/parallel_for_each.h"
 #include "tbb/spin_mutex.h"
 #include <memory>
 #include <mutex>
@@ -154,8 +155,7 @@ std::vector<std::string> RocksDBAdapter::getPrimaryKeys(
     return ret;
 }
 
-Entry::Ptr RocksDBAdapter::getRow(
-    const TableInfo::Ptr& _tableInfo, const std::string_view& _key)
+Entry::Ptr RocksDBAdapter::getRow(const TableInfo::Ptr& _tableInfo, const std::string_view& _key)
 {
     // get TableID according tableName,
     auto perfixPair = getTablePerfix(_tableInfo->name);
@@ -277,36 +277,33 @@ std::pair<size_t, Error::Ptr> RocksDBAdapter::commitTables(
                 if (tableInfo->name == SYS_TABLE)
                 {
                     auto data = _tableDatas[i];
-                    for (auto& item : *data)
-                    {
-                        auto tableID = getNextTableID();
-                        auto realKey = TABLE_PERFIX + item.first;
-                        string tablePerfix = TABLE_PERFIX;
-                        tablePerfix.append((char*)&tableID, sizeof(tableID));
+                    tbb::parallel_for_each(data->begin(), data->end(),
+                        [&](std::pair<const std::string, Entry::Ptr>& item) {
+                            // the entry in SYS_TABLE is always new entry
+                            auto tableID = getNextTableID();
+                            auto realKey = TABLE_PERFIX + item.first;
+                            string tablePerfix = TABLE_PERFIX;
+                            tablePerfix.append((char*)&tableID, sizeof(tableID));
 
-                        {  // insert into cache
-                            std::unique_lock lock(m_tableIDCacheMutex);
-                            m_tableIDCache[realKey] = tablePerfix;
-                        }
-                        {
-                            // put new tableID to write batch
-                            // the lock is of the storage doesn't promiss SYS_TABLE is unique
-                            tbb::spin_mutex::scoped_lock lock(batchMutex);
-                            writeBatch.Put(m_metadataCF, Slice(realKey), Slice(tablePerfix));
-                        }
-#if 0
-                        STORAGE_LOG(TRACE)
-                            << LOG_BADGE("RocksDBAdapter new table")
-                            << LOG_KV("name", tableInfo->name) << LOG_KV("id", tableID)
-                            << LOG_KV("tablePerfix size", tablePerfix.size())
-                            << LOG_KV("key", item.first);
-#endif
-                    }
+                            {  // insert into cache
+                                std::unique_lock lock(m_tableIDCacheMutex);
+                                m_tableIDCache[realKey] = tablePerfix;
+                            }
+                            {  // put new tableID to write batch
+                                // storage doesn't promiss SYS_TABLE is unique
+                                tbb::spin_mutex::scoped_lock lock(batchMutex);
+                                writeBatch.Put(m_metadataCF, Slice(realKey), Slice(tablePerfix));
+                            }
+                            STORAGE_LOG(TRACE)
+                                << LOG_BADGE("RocksDBAdapter new table")
+                                << LOG_KV("name", tableInfo->name) << LOG_KV("id", tableID)
+                                << LOG_KV("key", item.first);
+                        });
                 }
             }
         });
     auto assignID_time_cost = utcTime();
-    // FIXME: process data cost a lot of time, try to parallel the serialization
+    // process data cost a lot of time, parallel the serialization
     tbb::parallel_for(tbb::blocked_range<size_t>(0, _tableInfos.size()),
         [&](const tbb::blocked_range<size_t>& range) {
             for (size_t i = range.begin(); i < range.end(); ++i)
@@ -324,35 +321,38 @@ std::pair<size_t, Error::Ptr> RocksDBAdapter::commitTables(
                 tablePerfix = std::move(perfixPair.first);
                 // parallel process tables data, convert to map of key value string
                 auto tableData = _tableDatas[i];
-                for (auto& data : *tableData)
-                {
-                    auto realKey = tablePerfix + TABLE_KEY_PERFIX + data.first;
-                    if (data.second->getStatus() == Entry::Status::DELETED)
-                    {  // deleted entry should use batch Delete
-                        tbb::spin_mutex::scoped_lock lock(batchMutex);
-                        writeBatch.Delete(Slice(realKey));
-                        continue;
-                    }
-                    vector<string> values;
-                    values.reserve(data.second->size());
-                    values.emplace_back(data.second->getField(tableInfo->key));
+                tbb::parallel_for_each(tableData->begin(), tableData->end(),
+                    [&](std::pair<const std::string, Entry::Ptr>& data) {
+                        auto realKey = tablePerfix + TABLE_KEY_PERFIX + data.first;
+                        if (data.second->getStatus() == Entry::Status::DELETED)
+                        {  // deleted entry should use batch Delete
+                            tbb::spin_mutex::scoped_lock lock(batchMutex);
+                            writeBatch.Delete(Slice(realKey));
+                        }
+                        else
+                        {
+                            vector<string> values;
+                            values.reserve(data.second->size());
+                            values.emplace_back(data.second->getField(tableInfo->key));
 
-                    for (auto& columnName : tableInfo->fields)
-                    {
-                        values.emplace_back(data.second->getField(columnName));
-                    }
-                    values.emplace_back(to_string(data.second->getStatus()));
-                    values.emplace_back(to_string(data.second->num()));
-                    stringstream ss;
-                    boost::archive::binary_oarchive oa(ss);
-                    oa << values;
-                    auto realValue = ss.str();
-                    {
-                        tbb::spin_mutex::scoped_lock lock(batchMutex);
-                        writeBatch.Put(Slice(realKey), Slice(realValue.data(), realValue.size()));
-                    }
-                    total.fetch_add(1);
-                }
+                            for (auto& columnName : tableInfo->fields)
+                            {
+                                values.emplace_back(data.second->getField(columnName));
+                            }
+                            values.emplace_back(to_string(data.second->getStatus()));
+                            values.emplace_back(to_string(data.second->num()));
+                            stringstream ss;
+                            boost::archive::binary_oarchive oa(ss);
+                            oa << values;
+                            auto realValue = ss.str();
+                            {
+                                tbb::spin_mutex::scoped_lock lock(batchMutex);
+                                writeBatch.Put(
+                                    Slice(realKey), Slice(realValue.data(), realValue.size()));
+                            }
+                        }
+                        total.fetch_add(1);
+                    });
                 // TODO: maybe commit table to different column family according second path
             }
         });
