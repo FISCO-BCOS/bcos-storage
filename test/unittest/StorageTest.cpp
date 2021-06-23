@@ -33,6 +33,7 @@
 #include "boost/filesystem.hpp"
 #include "rocksdb/db.h"
 #include <boost/test/unit_test.hpp>
+#include <future>
 
 using namespace std;
 using namespace bcos;
@@ -174,22 +175,18 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
     ret = storage->commitBlock(blockNumber++, infos, datas);
     BOOST_TEST(ret.first == count);
     // add ut for asyncGetPrimaryKeys
-    struct Callback : public std::enable_shared_from_this<Callback>
-    {
-    public:
-        typedef std::shared_ptr<Callback> Ptr;
+    size_t min = 50;
+    auto condition = make_shared<Condition>();
+    condition->GE(to_string(min));
+    std::promise<void> asyncGetPrimaryKeysProm1;
 
-        explicit Callback(size_t _value, size_t _total) : value(_value), total(_total)
-        {
-            mutex.lock();
-        }
-
-        void onResult(const Error::Ptr& _error, const std::vector<std::string>& _result)
-        {
+    storage->asyncGetPrimaryKeys(testTableInfo, condition,
+        [&asyncGetPrimaryKeysProm1](
+            const Error::Ptr& _error, const std::vector<std::string>& _result) {
             BOOST_TEST(_error == nullptr);
             // include [6, 7, 8, 9]
-            BOOST_TEST(_result.size() == total);
-            auto valueStr = to_string(value);
+            BOOST_TEST(_result.size() == 54);
+            auto valueStr = to_string(50);
             for (auto& v : _result)
             {
                 if (v >= valueStr)
@@ -199,100 +196,74 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
                 }
                 BOOST_TEST(false);
             }
-            mutex.unlock();
-        }
-        size_t value = 0;
-        size_t total;
-        std::mutex mutex;
-    };
-    size_t min = 50;
-    Callback::Ptr callback = std::make_shared<Callback>(min, 54);
-    std::function<void(const Error::Ptr&, const std::vector<std::string>&)> fp =
-        std::bind(&Callback::onResult, callback, std::placeholders::_1, std::placeholders::_2);
-    auto condition = make_shared<Condition>();
-    condition->GE(to_string(min));
-    storage->asyncGetPrimaryKeys(testTableInfo, condition, fp);
-    // lock to wait for async send
-    callback->mutex.lock();
-    callback->mutex.unlock();
+            asyncGetPrimaryKeysProm1.set_value();
+        });
+    asyncGetPrimaryKeysProm1.get_future().get();
+
     // nullptr condition
-    min = 0;
-    callback = std::make_shared<Callback>(min, 100);
-    fp = std::bind(&Callback::onResult, callback, std::placeholders::_1, std::placeholders::_2);
-    storage->asyncGetPrimaryKeys(testTableInfo, nullptr, fp);
-    // lock to wait for async send
-    callback->mutex.lock();
-    callback->mutex.unlock();
+    std::promise<void> asyncGetPrimaryKeysProm;
+    storage->asyncGetPrimaryKeys(testTableInfo, nullptr,
+        [&asyncGetPrimaryKeysProm](
+            const Error::Ptr& _error, const std::vector<std::string>& _result) {
+            BOOST_TEST(_error == nullptr);
+            // include [6, 7, 8, 9]
+            BOOST_TEST(_result.size() == 100);
+            auto valueStr = to_string(0);
+            for (auto& v : _result)
+            {
+                if (v >= valueStr)
+                {
+                    BOOST_TEST(true);
+                    continue;
+                }
+                BOOST_TEST(false);
+            }
+            asyncGetPrimaryKeysProm.set_value();
+        });
 
     // add ut for asyncGetRows
-    struct Callback2 : public std::enable_shared_from_this<Callback2>
-    {
-        typedef std::shared_ptr<Callback2> Ptr;
-        explicit Callback2(shared_ptr<vector<string>> _keys) : keys(_keys) { mutex.lock(); }
-
-        void onResult(const Error::Ptr& _error, const std::map<std::string, Entry::Ptr>& _result)
-        {
-            BOOST_TEST(_error == nullptr);
-            BOOST_TEST(_result.size() == keys->size());
-            for (size_t i = 0; i < keys->size(); ++i)
-            {
-                auto entry = _result.at(keys->at(i));
-                BOOST_TEST(entry != nullptr);
-                // BOOST_TEST(entry->getField(testTableKey) == to_string(i));
-                BOOST_TEST(entry->getField("value1") == to_string(i + 1));
-                BOOST_TEST(entry->getField("value2") == to_string(i + 2));
-                BOOST_TEST(entry->num() == 0);
-                // BOOST_TEST(entry->dirty() == false);
-                BOOST_TEST(entry->getStatus() == Entry::Status::NORMAL);
-            }
-            mutex.unlock();
-        }
-        shared_ptr<vector<string>> keys = nullptr;
-        std::mutex mutex;
-    };
     auto keys = make_shared<vector<string>>();
     for (size_t i = 0; i < count; ++i)
     {
         keys->emplace_back(to_string(i));
     }
-
-    Callback2::Ptr callback2 = std::make_shared<Callback2>(keys);
-    std::function<void(const Error::Ptr&, const std::map<std::string, Entry::Ptr>&)> fp2 =
-        std::bind(&Callback2::onResult, callback2, std::placeholders::_1, std::placeholders::_2);
-    storage->asyncGetRows(testTableInfo, keys, fp2);
-    // lock to wait for async send
-    callback2->mutex.lock();
-    callback2->mutex.unlock();
+    std::promise<pair<Error::Ptr, std::map<std::string, Entry::Ptr>>> asyncGetRowsProm;
+    storage->asyncGetRows(testTableInfo, keys,
+        [&asyncGetRowsProm](
+            const Error::Ptr& _error, const std::map<std::string, Entry::Ptr>& _result) {
+            asyncGetRowsProm.set_value({_error, _result});
+        });
+    auto asyncGetRowsRet = asyncGetRowsProm.get_future().get();
+    BOOST_TEST(asyncGetRowsRet.first == nullptr);
+    BOOST_TEST(asyncGetRowsRet.second.size() == keys->size());
+    for (size_t i = 0; i < keys->size(); ++i)
+    {
+        auto entry = asyncGetRowsRet.second.at(keys->at(i));
+        BOOST_TEST(entry != nullptr);
+        // BOOST_TEST(entry->getField(testTableKey) == to_string(i));
+        BOOST_TEST(entry->getField("value1") == to_string(i + 1));
+        BOOST_TEST(entry->getField("value2") == to_string(i + 2));
+        BOOST_TEST(entry->num() == 0);
+        // BOOST_TEST(entry->dirty() == false);
+        BOOST_TEST(entry->getStatus() == Entry::Status::NORMAL);
+    }
 
     // add ut for asyncGetRow
-    struct Callback3 : public std::enable_shared_from_this<Callback3>
-    {
-        typedef std::shared_ptr<Callback3> Ptr;
-        explicit Callback3(size_t _key) : key(_key) { mutex.lock(); }
-
-        void onResult(const Error::Ptr& _error, const Entry::Ptr& _result)
-        {
-            BOOST_TEST(_error == nullptr);
-            BOOST_TEST(_result != nullptr);
-            // BOOST_TEST(_result->getField(testTableKey) == to_string(i));
-            BOOST_TEST(_result->getField("value1") == to_string(key + 1));
-            BOOST_TEST(_result->getField("value2") == to_string(key + 2));
-            BOOST_TEST(_result->num() == 0);
-            // BOOST_TEST(_result->dirty() == false);
-            BOOST_TEST(_result->getStatus() == Entry::Status::NORMAL);
-            mutex.unlock();
-        }
-        size_t key = 0;
-        std::mutex mutex;
-    };
-    auto key = string("56");
-    Callback3::Ptr callback3 = std::make_shared<Callback3>(56);
-    std::function<void(const Error::Ptr&, const Entry::Ptr&)> fp3 =
-        std::bind(&Callback3::onResult, callback3, std::placeholders::_1, std::placeholders::_2);
-    storage->asyncGetRow(testTableInfo, key, fp3);
-    // lock to wait for async send
-    callback3->mutex.lock();
-    callback3->mutex.unlock();
+    auto key = 56;
+    std::promise<pair<Error::Ptr, Entry::Ptr>> prom;
+    storage->asyncGetRow(testTableInfo, to_string(key),
+        [&prom](const Error::Ptr& _error, const Entry::Ptr& _result) {
+            prom.set_value({_error, _result});
+        });
+    auto asyncGetRowRet = prom.get_future().get();
+    BOOST_TEST(asyncGetRowRet.first == nullptr);
+    BOOST_TEST(asyncGetRowRet.second != nullptr);
+    // BOOST_TEST(_result->getField(testTableKey) == to_string(i));
+    BOOST_TEST(asyncGetRowRet.second->getField("value1") == to_string(key + 1));
+    BOOST_TEST(asyncGetRowRet.second->getField("value2") == to_string(key + 2));
+    BOOST_TEST(asyncGetRowRet.second->num() == 0);
+    // BOOST_TEST(asyncGetRowRet.second->dirty() == false);
+    BOOST_TEST(asyncGetRowRet.second->getStatus() == Entry::Status::NORMAL);
 
     // TODO: add ut for asyncCommitTables
 }

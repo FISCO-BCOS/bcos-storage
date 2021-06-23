@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(commitTables)
 
     datas.push_back(sysTableData);
     ret = adapter->commitTables(infos, datas);
-    BOOST_TEST(ret.first == count + 1); // sys table
+    BOOST_TEST(ret.first == count + 2); // sys table + deleted
 
     for (size_t i = 0; i < count; ++i)
     {
