@@ -334,7 +334,7 @@ std::pair<size_t, Error::Ptr> RocksDBAdapter::commitTables(
                             vector<string> values;
                             values.reserve(data.second->size());
                             values.emplace_back(data.second->getField(tableInfo->key));
-
+                            // TODO: write binary_oarchive for Entry to avoid construct values
                             for (auto& columnName : tableInfo->fields)
                             {
                                 values.emplace_back(data.second->getField(columnName));
