@@ -66,8 +66,6 @@ std::pair<size_t, Error::Ptr> StorageImpl::commitBlock(protocol::BlockNumber _nu
     const std::vector<TableInfo::Ptr>& _infos,
     const std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>& _datas)
 {
-    STORAGE_LOG(INFO) << LOG_BADGE("StorageImpl") << LOG_DESC("commitBlock")
-                      << LOG_KV("block", _number);
     // merge state cache then commit
     std::shared_ptr<TableFactoryInterface> stateTableFactory = nullptr;
     {
@@ -77,21 +75,27 @@ std::pair<size_t, Error::Ptr> StorageImpl::commitBlock(protocol::BlockNumber _nu
             stateTableFactory = m_number2TableFactory.at(_number);
         }
     }
+    std::pair<size_t, Error::Ptr> ret;
     if (stateTableFactory)
     {
+        STORAGE_LOG(INFO) << LOG_BADGE("StorageImpl") << LOG_DESC("commitBlock and state")
+                          << LOG_KV("block", _number);
         auto stateData = stateTableFactory->exportData();
         stateData.first.insert(stateData.first.end(), _infos.begin(), _infos.end());
         stateData.second.insert(stateData.second.end(), _datas.begin(), _datas.end());
 
-        auto ret = m_stateDB->commitTables(stateData.first, stateData.second);
-        if (!ret.second)
-        {  // drop state cache, when commite succeed
-            dropStateCache(_number);
-        }
-        return ret;
+        ret = m_stateDB->commitTables(stateData.first, stateData.second);
     }
-    // empty block has not state and consensus will commit empty block
-    auto ret = m_stateDB->commitTables(_infos, _datas);
+    else
+    {
+        if (_number >= 0)
+        {
+            STORAGE_LOG(INFO) << LOG_BADGE("StorageImpl") << LOG_DESC("commitBlock")
+                              << LOG_KV("block", _number);
+        }
+        // consensus will commit empty block without state
+        ret = m_stateDB->commitTables(_infos, _datas);
+    }
     if (!ret.second)
     {  // drop state cache, when commite succeed
         dropStateCache(_number);
