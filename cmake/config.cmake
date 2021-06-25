@@ -6,9 +6,9 @@ hunter_config(bcos-framework VERSION 3.0.0-local
     CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON
 )
 
-hunter_config(rocksdb VERSION 6.19.3
-	URL https://${URL_BASE}/facebook/rocksdb/archive/refs/tags/v6.19.3.tar.gz
-    SHA1 27c18025d739e83fe3819e48f2f4dfcc43526462
+hunter_config(rocksdb VERSION 6.20.3
+	URL https://${URL_BASE}/facebook/rocksdb/archive/refs/tags/v6.20.3.tar.gz
+    SHA1 64e4e6031820026c051d6e2072c0197e3bce1643
     CMAKE_ARGS WITH_TESTS=OFF
     WITH_GFLAGS=OFF
     WITH_BENCHMARK_TOOLS=OFF

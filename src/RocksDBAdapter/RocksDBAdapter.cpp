@@ -70,6 +70,7 @@ RocksDBAdapter::~RocksDBAdapter()
     {
         auto s = m_db->DestroyColumnFamilyHandle(m_metadataCF);
         assert(s.ok());
+        m_metadataCF = nullptr;
     }
 }
 
