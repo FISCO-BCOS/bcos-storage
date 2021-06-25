@@ -24,19 +24,59 @@
 #include "AdapterInterface.h"
 #include "KVDBInterface.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include <tbb/concurrent_queue.h>
+#include <tbb/concurrent_unordered_map.h>
+#include <tbb/concurrent_unordered_set.h>
+#include <tbb/spin_mutex.h>
+#include <tbb/spin_rw_mutex.h>
+#include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/identity.hpp>
+#include <boost/multi_index/sequenced_index.hpp>
+#include <boost/multi_index_container.hpp>
 #include <shared_mutex>
+#include <thread>
 
 namespace bcos
 {
 class ThreadPool;
 namespace storage
 {
+typedef tbb::spin_rw_mutex RWMutex;
+typedef tbb::spin_rw_mutex::scoped_lock RWScoped;
+
+class Cache
+{
+public:
+    typedef std::shared_ptr<Cache> Ptr;
+    Cache(){};
+    virtual ~Cache(){};
+
+    virtual Entry::Ptr entry() { return m_entry; }
+    virtual void setEntry(Entry::Ptr entry) { m_entry = entry; }
+    virtual protocol::BlockNumber num() const { return m_entry->num(); }
+
+    virtual RWMutex* mutex() { return &m_mutex; }
+
+    virtual bool empty() { return m_empty; }
+    virtual void setEmpty(bool empty) { m_empty = empty; }
+
+
+private:
+    RWMutex m_mutex;
+
+    bool m_empty = true;
+    std::string m_key;
+    Entry::Ptr m_entry = nullptr;
+};
+
 class StorageImpl : public StorageInterface
 {
 public:
     using Ptr = std::shared_ptr<StorageImpl>;
+
     explicit StorageImpl(const std::shared_ptr<AdapterInterface> _stateDB,
-        const std::shared_ptr<KVDBInterface> _kvDB, size_t _poolSize = 4);
+        const std::shared_ptr<KVDBInterface> _kvDB, size_t _poolSize = 4,
+        int32_t _clearInterval = 5, int64_t _maxCapacity = 128);
     ~StorageImpl() {}
     std::vector<std::string> getPrimaryKeys(
         const TableInfo::Ptr& _tableInfo, const Condition::Ptr& _condition) const override;
@@ -93,13 +133,48 @@ public:
         std::function<void(const Error::Ptr&, const std::shared_ptr<std::vector<std::string>>&)>
             _callback) override;
     void stop() override;
+    void start() override;
+    void disableCache() { m_enableCache = false; }
 
 protected:
+    void addStateToCache(std::pair<std::vector<TableInfo::Ptr>,
+        std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>>&& _data);
+    void checkAndClear();
+    std::tuple<std::shared_ptr<RWScoped>, Cache::Ptr, bool> touchCache(
+        const std::string& _tableName, const std::string_view& _key);
+    void touchMRU(const std::string& table, const std::string_view& key, ssize_t capacity);
+    void updateMRU(const std::string& table, const std::string& key, ssize_t capacity);
+    void removeCache(const std::string& table, const std::string& key);
+    void updateCapacity(ssize_t capacity);
+    std::string readableCapacity(size_t num);
+
     std::shared_ptr<AdapterInterface> m_stateDB = nullptr;
     std::shared_ptr<KVDBInterface> m_kvDB = nullptr;
     std::shared_ptr<ThreadPool> m_threadPool = nullptr;
+    std::shared_ptr<ThreadPool> m_asyncThread = nullptr;
     mutable std::shared_mutex m_number2TableFactoryMutex;
     std::map<protocol::BlockNumber, std::shared_ptr<TableFactoryInterface>> m_number2TableFactory;
+
+    std::shared_ptr<tbb::atomic<bool>> m_running;
+    std::shared_ptr<boost::multi_index_container<std::pair<std::string, std::string>,
+        boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
+            boost::multi_index::hashed_unique<
+                boost::multi_index::identity<std::pair<std::string, std::string>>>>>>
+        m_mru;
+    std::shared_ptr<tbb::concurrent_queue<std::tuple<std::string, std::string, ssize_t>>>
+        m_mruQueue;
+
+    tbb::atomic<protocol::BlockNumber> m_blockNumber = {0};
+    tbb::atomic<uint64_t> m_hitTimes;
+    tbb::atomic<uint64_t> m_queryTimes;
+    tbb::atomic<int64_t> m_capacity;
+
+    int64_t m_maxCapacity = 128 * 1024 * 1024;  // default 256MB for cache
+    int32_t m_clearInterval = 10;               // default 10s check cache
+    tbb::concurrent_unordered_map<std::string, Cache::Ptr> m_caches;
+    RWMutex m_cachesMutex;
+    std::shared_ptr<std::thread> m_clearThread;
+    bool m_enableCache = true;
 };
 }  // namespace storage
 }  // namespace bcos

@@ -57,7 +57,7 @@ struct StorageFixture
         testTableInfo->newTable = true;
         auto ret = factory->createRocksDB("test_db_2", RocksDBAdapter::TABLE_PERFIX_LENGTH);
         kvDB = make_shared<KVDBImpl>(ret.first);
-        storage = make_shared<StorageImpl>(memoryStorage, kvDB);
+        storage = make_shared<StorageImpl>(memoryStorage, kvDB, 2, 1, 1);
     }
     ~StorageFixture()
     {
@@ -79,6 +79,7 @@ BOOST_FIXTURE_TEST_SUITE(StorageTest, StorageFixture)
 
 BOOST_AUTO_TEST_CASE(commitTables)
 {
+    storage->start();
     protocol::BlockNumber blockNumber = 0;
     // if this ut failed, please `rm -rf unittest_db` and try again
     auto infos = vector<TableInfo::Ptr>();
@@ -139,10 +140,13 @@ BOOST_AUTO_TEST_CASE(commitTables)
         // BOOST_TEST(entry->dirty() == false);
         BOOST_TEST(entry->getStatus() == Entry::Status::NORMAL);
     }
+    storage->stop();
 }
 
 BOOST_AUTO_TEST_CASE(asyncInterfaces)
 {
+    storage->start();
+
     protocol::BlockNumber blockNumber = 0;
     auto infos = vector<TableInfo::Ptr>();
     auto datas = vector<shared_ptr<map<string, Entry::Ptr>>>();
@@ -266,11 +270,13 @@ BOOST_AUTO_TEST_CASE(asyncInterfaces)
     BOOST_TEST(asyncGetRowRet.second->getStatus() == Entry::Status::NORMAL);
 
     // TODO: add ut for asyncCommitTables
+    storage->stop();
 }
 
 
 BOOST_AUTO_TEST_CASE(TableFactory_cache)
 {
+    storage->start();
     protocol::BlockNumber blockNumber = 0;
     auto infos = vector<TableInfo::Ptr>();
     auto datas = vector<shared_ptr<map<string, Entry::Ptr>>>();
@@ -350,10 +356,13 @@ BOOST_AUTO_TEST_CASE(TableFactory_cache)
     // TODO: add ut for asyncDropStateCache
     // TODO: add ut for asyncGetBlock
     // TODO: add ut for asyncGetStateCache
+    storage->stop();
 }
 
 BOOST_AUTO_TEST_CASE(KVInterfaces)
 {
+    storage->start();
+
     // if this ut failed, please `rm -rf unittest_db` and try again
     size_t count = 10;
     for (size_t i = 0; i < count; ++i)
@@ -409,6 +418,7 @@ BOOST_AUTO_TEST_CASE(KVInterfaces)
         callback->mutex.lock();
         callback->mutex.unlock();
     }
+    storage->stop();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

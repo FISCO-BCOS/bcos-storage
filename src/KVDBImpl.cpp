@@ -38,8 +38,8 @@ Error::Ptr KVDBImpl::put(const std::string_view& _columnFamily, const std::strin
     const std::string_view& _value)
 {
     string realeKey = string(_columnFamily).append("_").append(_key);
-    auto status = m_db->Put(
-        WriteOptions(), Slice(realeKey.data(), realeKey.size()), Slice(_value.data(), _value.size()));
+    auto status = m_db->Put(WriteOptions(), Slice(realeKey.data(), realeKey.size()),
+        Slice(_value.data(), _value.size()));
     if (!status.ok())
     {
         STORAGE_LOG(ERROR) << LOG_BADGE("KVDBImpl put failed") << LOG_KV("key", _key)
