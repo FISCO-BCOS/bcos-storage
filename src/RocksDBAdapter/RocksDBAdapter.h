@@ -21,6 +21,7 @@
 #pragma once
 
 #include "../AdapterInterface.h"
+#include <boost/algorithm/string/join.hpp>
 #include <boost/lexical_cast.hpp>
 #include <atomic>
 #include <map>
@@ -40,19 +41,19 @@ const char* const METADATA_COLUMN_NAME = "meta";
 class RocksDBAdapter : public AdapterInterface
 {
 public:
-    static const int TABLE_PERFIX_LENGTH = 9;  //"t" + sizeof(int64_t)
+    static const int TABLE_PERFIX_LENGTH = 9;  //"t" + sizeof(int64_t) + "k"
     // using CryptHandler = std::function<void(std::string const&, std::string&)>;
     typedef std::shared_ptr<RocksDBAdapter> Ptr;
     explicit RocksDBAdapter(rocksdb::DB* _db, rocksdb::ColumnFamilyHandle* handler);
     virtual ~RocksDBAdapter();
 
-    std::vector<std::string> getPrimaryKeys(const TableInfo::Ptr& _tableInfo,
-        const Condition::Ptr& _condition) const override;
-    Entry::Ptr getRow(
-        const TableInfo::Ptr& _tableInfo, const std::string_view& _key) override;
+    std::vector<std::string> getPrimaryKeys(
+        const TableInfo::Ptr& _tableInfo, const Condition::Ptr& _condition) const override;
+    Entry::Ptr getRow(const TableInfo::Ptr& _tableInfo, const std::string_view& _key) override;
     std::map<std::string, Entry::Ptr> getRows(
         const TableInfo::Ptr& _tableInfo, const std::vector<std::string>& _keys) override;
-    std::pair<size_t, Error::Ptr> commitTables(const std::vector<std::shared_ptr<TableInfo>>& _tableInfos,
+    std::pair<size_t, Error::Ptr> commitTables(
+        const std::vector<std::shared_ptr<TableInfo>>& _tableInfos,
         const std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>& _tableDatas)
         override;
 
@@ -66,7 +67,11 @@ private:
         if (_tableInfo->fields.size() != _values.size() - 3)
         {  // panic, 3 means [key, status, num]
             STORAGE_LOG(ERROR) << LOG_BADGE("RocksDBAdapter data mismatch")
-                               << LOG_KV("name", _tableInfo->name);
+                               << LOG_KV("name", _tableInfo->name)
+                               << LOG_KV("expect", _tableInfo->fields.size() + 3)
+                               << LOG_KV("got", _values.size())
+                               << LOG_KV("values", boost::algorithm::join(_values, "|"))
+                               << LOG_KV("fields", boost::algorithm::join(_tableInfo->fields, "|"));
             return nullptr;
         }
         auto deleted = boost::lexical_cast<bool>(_values[_tableInfo->fields.size() + 1]);
