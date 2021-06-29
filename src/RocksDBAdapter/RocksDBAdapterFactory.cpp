@@ -77,7 +77,7 @@ RocksDBAdapterFactory::createRocksDB(const std::string& _dbName, int _perfixLeng
         ColumnFamilyDescriptor(rocksdb::kDefaultColumnFamilyName, ColumnFamilyOptions()));
     for (auto& columnName : currentColumnFamilies)
     {
-        STORAGE_LOG(ERROR) << columnName << endl;
+        // STORAGE_LOG(ERROR) << columnName << endl;
         if (columnName == rocksdb::kDefaultColumnFamilyName)
         {
             continue;

@@ -55,12 +55,22 @@ RocksDBAdapter::RocksDBAdapter(rocksdb::DB* _db, rocksdb::ColumnFamilyHandle* _h
   : m_db(_db), m_metadataCF(_handler)
 {
     int64_t tableID = 0;
-    auto realKey = string(TABLE_PERFIX) + SYS_TABLE;
     string tablePerfix = TABLE_PERFIX;
     tablePerfix.append((char*)&tableID, sizeof(tableID));
 
     {  // insert into cache
-        m_tableIDCache[realKey] = tablePerfix;
+        m_tableIDCache[SYS_TABLE] = tablePerfix;
+    }
+    // get table Id from database
+    string value;
+    auto status = m_db->Get(ReadOptions(), m_metadataCF, Slice(CURRENT_TABLE_ID), &value);
+    if (status.IsNotFound())
+    {  // the first time to get the table id
+        m_tableID.store(1);
+    }
+    else
+    {  // convert current table id to int64_t store in m_tableID
+        m_tableID.store(boost::lexical_cast<int64_t>(value));
     }
 }
 
@@ -76,22 +86,20 @@ RocksDBAdapter::~RocksDBAdapter()
 
 std::pair<std::string, bool> RocksDBAdapter::getTablePerfix(const std::string& _tableName) const
 {
-    // TABLE_PERFIX+tableName store tableID, store tableID in meta column Family
+    // tableName store tableID, store tableID in meta column Family
     // tableID use 8B
-
-    auto realKey = TABLE_PERFIX + _tableName;
 
     {  // query from cache
         std::shared_lock lock(m_tableIDCacheMutex);
-        if (m_tableIDCache.count(realKey))
+        if (m_tableIDCache.count(_tableName))
         {
-            return std::make_pair(m_tableIDCache[realKey], true);
+            return std::make_pair(m_tableIDCache[_tableName], true);
         }
     }
 
     // if cache is missed, query from rocksDB
     string value;
-    auto status = m_db->Get(ReadOptions(), m_metadataCF, Slice(realKey), &value);
+    auto status = m_db->Get(ReadOptions(), m_metadataCF, Slice(_tableName), &value);
     if (!status.ok())
     {  // panic
         STORAGE_LOG(ERROR) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("table not exist")
@@ -100,28 +108,15 @@ std::pair<std::string, bool> RocksDBAdapter::getTablePerfix(const std::string& _
     }
     {  // insert into cache
         std::unique_lock lock(m_tableIDCacheMutex);
-        m_tableIDCache[realKey] = value;
+        m_tableIDCache[_tableName] = value;
     }
+    STORAGE_LOG(TRACE) << LOG_KV("name", _tableName)
+                       << LOG_KV("tableID", *((int64_t*)(value.data() + 1)));
     return std::make_pair(value, true);
 }
 
 int64_t RocksDBAdapter::getNextTableID()
 {
-    if (m_tableID.load() == 0)
-    {  // get table Id from database
-        string value;
-        auto status = m_db->Get(ReadOptions(), m_metadataCF, Slice(CURRENT_TABLE_ID), &value);
-        if (status.IsNotFound())
-        {  // the first time to get the table id
-            m_tableID.store(2);
-            return 1;
-        }
-        // convert current table id string to int64_t
-        int64_t nextTableID = boost::lexical_cast<int64_t>(value) + 1;
-        // store table id in m_tableID
-        m_tableID.store(nextTableID);
-        return nextTableID;
-    }
     return m_tableID.fetch_add(1);
 }
 
@@ -137,13 +132,12 @@ std::vector<std::string> RocksDBAdapter::getPrimaryKeys(
                            << LOG_KV("name", _tableInfo->name);
         return ret;
     }
-    auto& tablePerfix = perfixPair.first;
+    auto keyPerfix = perfixPair.first + TABLE_KEY_PERFIX;
     // TABLE_PERFIX query
     ReadOptions read_options;
     read_options.auto_prefix_mode = true;
     auto iter = m_db->NewIterator(read_options);
-    for (iter->Seek(tablePerfix); iter->Valid() && iter->key().starts_with(tablePerfix);
-         iter->Next())
+    for (iter->Seek(keyPerfix); iter->Valid() && iter->key().starts_with(keyPerfix); iter->Next())
     {
         size_t start = TABLE_PERFIX_LENGTH + 1;  // 1 is length of TABLE_KEY_PERFIX
         if (!_condition || _condition->isValid(
@@ -237,7 +231,7 @@ std::map<std::string, Entry::Ptr> RocksDBAdapter::getRows(
                 }
                 else
                 {
-                    STORAGE_LOG(ERROR)
+                    STORAGE_LOG(TRACE)
                         << LOG_BADGE("RocksDBAdapter getRows error")
                         << LOG_KV("name", _tableInfo->name) << LOG_KV("key", _keys[it])
                         << LOG_KV("message", status[it].ToString());
@@ -282,18 +276,17 @@ std::pair<size_t, Error::Ptr> RocksDBAdapter::commitTables(
                         [&](std::pair<const std::string, Entry::Ptr>& item) {
                             // the entry in SYS_TABLE is always new entry
                             auto tableID = getNextTableID();
-                            auto realKey = TABLE_PERFIX + item.first;
                             string tablePerfix = TABLE_PERFIX;
                             tablePerfix.append((char*)&tableID, sizeof(tableID));
 
                             {  // insert into cache
                                 std::unique_lock lock(m_tableIDCacheMutex);
-                                m_tableIDCache[realKey] = tablePerfix;
+                                m_tableIDCache[item.first] = tablePerfix;
                             }
                             {  // put new tableID to write batch
                                 // storage doesn't promiss SYS_TABLE is unique
                                 tbb::spin_mutex::scoped_lock lock(batchMutex);
-                                writeBatch.Put(m_metadataCF, Slice(realKey), Slice(tablePerfix));
+                                writeBatch.Put(m_metadataCF, Slice(item.first), Slice(tablePerfix));
                             }
                             STORAGE_LOG(TRACE)
                                 << LOG_BADGE("RocksDBAdapter new table")
@@ -314,11 +307,11 @@ std::pair<size_t, Error::Ptr> RocksDBAdapter::commitTables(
                 auto perfixPair = getTablePerfix(tableInfo->name);
                 if (!perfixPair.second)
                 {  // panic
+                    assert(perfixPair.second);
                     STORAGE_LOG(ERROR)
                         << LOG_BADGE("commitTables") << LOG_DESC("getTablePerfix failed")
                         << LOG_KV("name", tableInfo->name);
                 }
-                assert(perfixPair.second);
                 tablePerfix = std::move(perfixPair.first);
                 // parallel process tables data, convert to map of key value string
                 auto tableData = _tableDatas[i];
@@ -359,7 +352,7 @@ std::pair<size_t, Error::Ptr> RocksDBAdapter::commitTables(
         });
     auto serialization_time_cost = utcTime();
     // commit current tableID in meta column family
-    auto currentTableID = m_tableID.load() - 1;
+    auto currentTableID = m_tableID.load();
     writeBatch.Put(m_metadataCF, Slice(CURRENT_TABLE_ID), Slice(to_string(currentTableID)));
     // commit to rocksDB
     auto status = m_db->Write(WriteOptions(), &writeBatch);
@@ -370,12 +363,12 @@ std::pair<size_t, Error::Ptr> RocksDBAdapter::commitTables(
         return {0, make_shared<Error>(StorageErrorCode::DataBaseUnavailable, status.ToString())};
     }
 
-    STORAGE_LOG(INFO) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("commitTables")
-                      << LOG_KV("tables", _tableDatas.size()) << LOG_KV("rows", total.load())
-                      << LOG_KV("assignIDTimeCost", assignID_time_cost - start_time)
-                      << LOG_KV("encodeTimeCost", serialization_time_cost - assignID_time_cost)
-                      << LOG_KV("writeDBTimeCost", utcTime() - serialization_time_cost)
-                      << LOG_KV("totalTimeCost", utcTime() - start_time);
+    STORAGE_LOG(DEBUG) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("commitTables")
+                       << LOG_KV("tables", _tableDatas.size()) << LOG_KV("rows", total.load())
+                       << LOG_KV("assignIDTimeCost", assignID_time_cost - start_time)
+                       << LOG_KV("encodeTimeCost", serialization_time_cost - assignID_time_cost)
+                       << LOG_KV("writeDBTimeCost", utcTime() - serialization_time_cost)
+                       << LOG_KV("totalTimeCost", utcTime() - start_time);
     return {total.load(), nullptr};
 }
 

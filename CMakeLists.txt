@@ -58,6 +58,12 @@ include(InstallBcosFrameworkDependencies)
 
 set(STORAGE_TARGET "bcos-storage")
 add_subdirectory(src)
+
+option(TOOLS "build tools" OFF)
+if(TOOLS)
+    add_subdirectory(tools)
+endif()
+
 if (TESTS)
     enable_testing()
     set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
