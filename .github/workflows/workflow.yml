@@ -83,7 +83,7 @@ jobs:
       - name: install Ubuntu dependencies
         run: sudo apt install -y git curl build-essential cmake ccache libzstd-dev
       - name: configure
-        run: cmake . -DTESTS=ON
+        run: cmake . -DTESTS=ON -DTOOLS=on
       - name: compile
         run: make -j2
       - name: run test
