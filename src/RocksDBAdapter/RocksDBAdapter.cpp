@@ -164,7 +164,7 @@ Entry::Ptr RocksDBAdapter::getRow(const TableInfo::Ptr& _tableInfo, const std::s
     auto status = m_db->Get(ReadOptions(), Slice(realKey), &value);
     if (!status.ok())
     {
-        STORAGE_LOG(DEBUG) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("getRow failed")
+        STORAGE_LOG(TRACE) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("getRow failed")
                            << LOG_KV("name", _tableInfo->name) << LOG_KV("key", _key)
                            << LOG_KV("message", status.ToString());
         return nullptr;
@@ -363,7 +363,7 @@ std::pair<size_t, Error::Ptr> RocksDBAdapter::commitTables(
         return {0, make_shared<Error>(StorageErrorCode::DataBaseUnavailable, status.ToString())};
     }
 
-    STORAGE_LOG(DEBUG) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("commitTables")
+    STORAGE_LOG(TRACE) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("commitTables")
                        << LOG_KV("tables", _tableDatas.size()) << LOG_KV("rows", total.load())
                        << LOG_KV("assignIDTimeCost", assignID_time_cost - start_time)
                        << LOG_KV("encodeTimeCost", serialization_time_cost - assignID_time_cost)
