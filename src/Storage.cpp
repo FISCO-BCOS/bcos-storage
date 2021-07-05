@@ -40,7 +40,7 @@ StorageImpl::StorageImpl(std::shared_ptr<AdapterInterface> _stateDB,
     assert(m_stateDB);
     assert(m_kvDB);
     m_threadPool = std::make_shared<bcos::ThreadPool>("asyncTasks", _poolSize);
-    m_asyncThread = std::make_shared<bcos::ThreadPool>("callbackTasks", 1);
+    m_asyncThread = std::make_shared<bcos::ThreadPool>("mru", 1);
 
     m_running = std::make_shared<tbb::atomic<bool>>(true);
 }
@@ -104,10 +104,14 @@ Entry::Ptr StorageImpl::getRow(const TableInfo::Ptr& _tableInfo, const std::stri
         if (cache->empty())
         {
             entry = m_stateDB->getRow(_tableInfo, _key);
-            cache->setEntry(entry);
-            cache->setEmpty(false);
+            if (entry)
+            {
+                touchMRU(_tableInfo->name, _key, entry->capacityOfHashField());
+                cache->setEntry(entry);
+                cache->setEmpty(false);
+            }
         }
-        touchMRU(_tableInfo->name, _key, entry->capacityOfHashField());
+
         return entry;
     }
     return m_stateDB->getRow(_tableInfo, _key);

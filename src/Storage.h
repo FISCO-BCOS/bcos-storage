@@ -169,7 +169,7 @@ protected:
     tbb::atomic<uint64_t> m_queryTimes;
     tbb::atomic<int64_t> m_capacity;
 
-    int64_t m_maxCapacity = 128 * 1024 * 1024;  // default 256MB for cache
+    int64_t m_maxCapacity = 128 * 1024 * 1024;  // default 128MB for cache
     int32_t m_clearInterval = 10;               // default 10s check cache
     tbb::concurrent_unordered_map<std::string, Cache::Ptr> m_caches;
     RWMutex m_cachesMutex;
