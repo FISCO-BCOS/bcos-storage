@@ -35,5 +35,5 @@ target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework ${STORAGE_T
 # for code coverage
 if (COVERAGE)
     include(Coverage)
-    config_coverage("'/usr*' 'boost/**'")
+    config_coverage("coverage" "'/usr*' 'boost/**'")
 endif ()
