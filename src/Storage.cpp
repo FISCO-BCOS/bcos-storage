@@ -158,7 +158,7 @@ std::pair<size_t, Error::Ptr> StorageImpl::commitBlock(protocol::BlockNumber _nu
     {
         STORAGE_LOG(INFO) << LOG_BADGE("StorageImpl") << LOG_DESC("commitBlock and state")
                           << LOG_KV("block", _number);
-        auto stateData = stateTableFactory->exportData();
+        auto stateData = stateTableFactory->exportData(_number);
         stateData.first.insert(stateData.first.end(), _infos.begin(), _infos.end());
         stateData.second.insert(stateData.second.end(), _datas.begin(), _datas.end());
 
