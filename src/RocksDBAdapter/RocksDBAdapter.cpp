@@ -258,7 +258,7 @@ std::pair<size_t, Error::Ptr> RocksDBAdapter::commitTables(
             0, make_shared<Error>(StorageErrorCode::InvalidArgument, "parameters size mismatch")};
     }
     assert(_tableInfos.size() == _tableDatas.size());
-
+    // FIXME: check if disk space >= 512MB
     auto start_time = utcTime();
     WriteBatch writeBatch;
     tbb::spin_mutex batchMutex;
