@@ -17,9 +17,9 @@
  * @file RocksDBAdapterTest.cpp
  */
 
-#include "RocksDBAdapter.h"
+#include "bcos-storage/RocksDBAdapter.h"
 #include "bcos-framework/libtable/TableFactory.h"
-#include "RocksDBAdapterFactory.h"
+#include "bcos-storage/RocksDBAdapterFactory.h"
 #include "rocksdb/db.h"
 #include <boost/test/unit_test.hpp>
 #include "boost/filesystem.hpp"

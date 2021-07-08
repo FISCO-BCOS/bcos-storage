@@ -20,7 +20,7 @@
  */
 #pragma once
 
-#include "RocksDBAdapter.h"
+#include "bcos-storage/RocksDBAdapter.h"
 #include "rocksdb/db.h"
 #include <utility>
 

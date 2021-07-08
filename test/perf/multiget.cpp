@@ -19,9 +19,9 @@
  * @date 2020-03-18
  */
 
-#include "KVDBImpl.h"
-#include "RocksDBAdapter.h"
-#include "RocksDBAdapterFactory.h"
+#include "bcos-storage/KVDBImpl.h"
+#include "bcos-storage/RocksDBAdapter.h"
+#include "bcos-storage/RocksDBAdapterFactory.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"

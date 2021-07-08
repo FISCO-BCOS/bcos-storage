@@ -19,7 +19,7 @@
  *  @date 20180423
  */
 
-#include "RocksDBAdapter.h"
+#include "bcos-storage/RocksDBAdapter.h"
 #include "bcos-framework/interfaces/storage/TableInterface.h"
 #include "boost/archive/binary_iarchive.hpp"
 #include "boost/archive/binary_oarchive.hpp"
