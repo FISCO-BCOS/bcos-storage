@@ -19,7 +19,7 @@
 
 #pragma once
 
-#include "AdapterInterface.h"
+#include "bcos-storage/AdapterInterface.h"
 #include <mutex>
 #include <string>
 

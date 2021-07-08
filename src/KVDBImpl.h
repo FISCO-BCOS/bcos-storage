@@ -20,7 +20,7 @@
  */
 #pragma once
 
-#include "KVDBInterface.h"
+#include "bcos-storage/KVDBInterface.h"
 #include <map>
 #include <string>
 

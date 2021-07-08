@@ -18,7 +18,7 @@
  * @author: xingqiangbai
  * @date: 2021-04-16
  */
-#include "Storage.h"
+#include "bcos-storage/Storage.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/libtable/TableFactory.h"
 #include "bcos-framework/libutilities/ThreadPool.h"

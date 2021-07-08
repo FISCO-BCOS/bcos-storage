@@ -17,11 +17,11 @@
  * @file StorageTest.cpp
  */
 
-#include "Storage.h"
+#include "bcos-storage/Storage.h"
 #include "KVDBImpl.h"
 #include "MemoryDB.h"
-#include "RocksDBAdapter/RocksDBAdapter.h"
-#include "RocksDBAdapter/RocksDBAdapterFactory.h"
+#include "RocksDBAdapter.h"
+#include "RocksDBAdapterFactory.h"
 #include "bcos-framework/libprotocol/protobuf/PBBlock.h"
 #include "bcos-framework/libprotocol/protobuf/PBBlockFactory.h"
 #include "bcos-framework/libprotocol/protobuf/PBBlockHeaderFactory.h"

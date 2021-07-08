@@ -20,7 +20,7 @@
  */
 #pragma once
 
-#include "../AdapterInterface.h"
+#include "bcos-storage/AdapterInterface.h"
 #include <boost/algorithm/string/join.hpp>
 #include <boost/lexical_cast.hpp>
 #include <atomic>

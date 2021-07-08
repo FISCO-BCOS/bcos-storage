@@ -20,8 +20,8 @@
  */
 
 #include "KVDBImpl.h"
-#include "RocksDBAdapter/RocksDBAdapter.h"
-#include "RocksDBAdapter/RocksDBAdapterFactory.h"
+#include "RocksDBAdapter.h"
+#include "RocksDBAdapterFactory.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
