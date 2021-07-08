@@ -80,12 +80,26 @@ void StorageImpl::start()
 
 void StorageImpl::stop()
 {
+    if (!m_running)
+    {
+        STORAGE_LOG(WARNING) << LOG_DESC("The storage has already been stopped");
+        return;
+    }
+    STORAGE_LOG(INFO) << LOG_DESC("Stop the storage");
     m_running->store(false);
-    m_threadPool->stop();
+    if (m_threadPool)
+    {
+        m_threadPool->stop();
+    }
+    if (m_asyncThread)
+    {
+        m_asyncThread->stop();
+    }
     if (m_clearThread)
     {
         m_clearThread->join();
     }
+    STORAGE_LOG(INFO) << LOG_DESC("Stop the storage success");
 }
 
 std::vector<std::string> StorageImpl::getPrimaryKeys(
