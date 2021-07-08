@@ -19,8 +19,8 @@
  * @date 2020-06-29
  */
 
-#include "RocksDBAdapter/RocksDBAdapter.h"
-#include "RocksDBAdapter/RocksDBAdapterFactory.h"
+#include "RocksDBAdapter.h"
+#include "RocksDBAdapterFactory.h"
 #include "bcos-framework/libtable/TableFactory.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/db.h"

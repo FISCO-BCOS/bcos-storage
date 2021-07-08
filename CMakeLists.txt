@@ -59,6 +59,12 @@ include(InstallBcosFrameworkDependencies)
 set(STORAGE_TARGET "bcos-storage")
 add_subdirectory(src)
 
+install(
+    DIRECTORY "include/bcos-storage"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/bcos-storage"
+    FILES_MATCHING PATTERN "*.h"
+)
+
 option(TOOLS "build tools" OFF)
 if(TOOLS)
     add_subdirectory(tools)

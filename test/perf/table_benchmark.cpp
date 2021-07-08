@@ -20,9 +20,9 @@
  */
 
 #include "KVDBImpl.h"
-#include "RocksDBAdapter/RocksDBAdapter.h"
-#include "RocksDBAdapter/RocksDBAdapterFactory.h"
-#include "Storage.h"
+#include "RocksDBAdapter.h"
+#include "RocksDBAdapterFactory.h"
+#include "bcos-storage/Storage.h"
 #include "bcos-framework/libtable/TableFactory.h"
 #include "bcos-framework/testutils/crypto/HashImpl.h"
 #include "boost/filesystem.hpp"
