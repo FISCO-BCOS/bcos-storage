@@ -21,9 +21,9 @@
 
 #pragma once
 
-#include "AdapterInterface.h"
-#include "KVDBInterface.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "bcos-storage/AdapterInterface.h"
+#include "bcos-storage/KVDBInterface.h"
 #include <tbb/concurrent_queue.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_unordered_set.h>

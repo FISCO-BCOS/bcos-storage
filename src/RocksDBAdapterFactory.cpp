@@ -19,8 +19,8 @@
  *  @date 20180423
  */
 
-#include "RocksDBAdapterFactory.h"
-#include "RocksDBAdapter.h"
+#include "bcos-storage/RocksDBAdapterFactory.h"
+#include "bcos-storage/RocksDBAdapter.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"

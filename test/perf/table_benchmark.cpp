@@ -19,9 +19,9 @@
  * @date 2020-03-18
  */
 
-#include "KVDBImpl.h"
-#include "RocksDBAdapter.h"
-#include "RocksDBAdapterFactory.h"
+#include "bcos-storage/KVDBImpl.h"
+#include "bcos-storage/RocksDBAdapter.h"
+#include "bcos-storage/RocksDBAdapterFactory.h"
 #include "bcos-storage/Storage.h"
 #include "bcos-framework/libtable/TableFactory.h"
 #include "bcos-framework/testutils/crypto/HashImpl.h"

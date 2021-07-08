@@ -19,7 +19,7 @@
  * @date: 2021-05-12
  */
 
-#include "KVDBImpl.h"
+#include "bcos-storage/KVDBImpl.h"
 #include "bcos-framework/interfaces/storage/Common.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "boost/filesystem.hpp"
