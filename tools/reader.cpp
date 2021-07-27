@@ -89,7 +89,7 @@ int main(int argc, const char* argv[])
     cout << "rocksdb path : " << storagePath << endl;
     cout << "tableName    : " << tableName << endl;
     auto factory = make_shared<RocksDBAdapterFactory>(storagePath);
-    auto adapter = factory->createAdapter(storageName, RocksDBAdapter::TABLE_PERFIX_LENGTH);
+    auto adapter = factory->createAdapter(storageName, RocksDBAdapter::TABLE_PREFIX_LENGTH);
     assert(adapter);
     auto sysTableInfo = getSysTableInfo(SYS_TABLE);
     TableInfo::Ptr tableInfo = sysTableInfo;

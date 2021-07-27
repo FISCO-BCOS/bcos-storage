@@ -103,7 +103,7 @@ int main(int argc, const char* argv[])
     {
         vector<string> columnFamilies{METADATA_COLUMN_NAME};
         auto ret = factory->createRocksDB(
-            "state", RocksDBAdapter::TABLE_PERFIX_LENGTH, true, columnFamilies);
+            "state", RocksDBAdapter::TABLE_PREFIX_LENGTH, true, columnFamilies);
         assert(ret.first);
         auto db = ret.first;
         auto it = db->NewIterator(rocksdb::ReadOptions());
@@ -114,9 +114,9 @@ int main(int argc, const char* argv[])
         delete it;
         return 0;
     }
-    auto ret = factory->createRocksDB("KV_test", RocksDBAdapter::TABLE_PERFIX_LENGTH);
+    auto ret = factory->createRocksDB("KV_test", RocksDBAdapter::TABLE_PREFIX_LENGTH);
     auto kvDB = make_shared<KVDBImpl>(ret.first);
-    auto adapter = factory->createAdapter("state", RocksDBAdapter::TABLE_PERFIX_LENGTH);
+    auto adapter = factory->createAdapter("state", RocksDBAdapter::TABLE_PREFIX_LENGTH);
     auto storage = make_shared<StorageImpl>(adapter, kvDB);
     auto hashImpl = std::make_shared<Keccak256Hash>();
     auto tableFactory = make_shared<TableFactory>(storage, hashImpl, blockNumber);
