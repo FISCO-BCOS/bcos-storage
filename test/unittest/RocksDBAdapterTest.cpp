@@ -39,7 +39,7 @@ struct RocksDBAdapterFixture
     RocksDBAdapterFixture()
     {
         factory = make_shared<RocksDBAdapterFactory>(testPath.string());
-        adapter = factory->createAdapter("test_db_1", RocksDBAdapter::TABLE_PERFIX_LENGTH);
+        adapter = factory->createAdapter("test_db_1", RocksDBAdapter::TABLE_PREFIX_LENGTH);
         testTableInfo =
             std::make_shared<storage::TableInfo>(testTableName, testTableKey, "value1,value2");
         testTableInfo->newTable = true;

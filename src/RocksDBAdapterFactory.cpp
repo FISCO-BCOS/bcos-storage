@@ -34,7 +34,7 @@ namespace bcos
 namespace storage
 {
 std::pair<rocksdb::DB*, std::vector<rocksdb::ColumnFamilyHandle*>>
-RocksDBAdapterFactory::createRocksDB(const std::string& _dbName, int _perfixLength,
+RocksDBAdapterFactory::createRocksDB(const std::string& _dbName, int _prefixLength,
     bool _createIfMissing, const std::vector<std::string>& _columnFamilies)
 {
     std::pair<rocksdb::DB*, std::vector<rocksdb::ColumnFamilyHandle*>> ret{
@@ -53,9 +53,9 @@ RocksDBAdapterFactory::createRocksDB(const std::string& _dbName, int _perfixLeng
     options.create_if_missing = true;
     options.max_open_files = 200;
     options.compression = rocksdb::kZSTD;
-    if (_perfixLength > 0)
+    if (_prefixLength > 0)
     {  // supporting prefix extraction
-        options.prefix_extractor.reset(NewCappedPrefixTransform(_perfixLength));
+        options.prefix_extractor.reset(NewCappedPrefixTransform(_prefixLength));
     }
     if (_columnFamilies.empty())
     {
@@ -125,10 +125,10 @@ RocksDBAdapterFactory::createRocksDB(const std::string& _dbName, int _perfixLeng
 }
 
 RocksDBAdapter::Ptr RocksDBAdapterFactory::createAdapter(
-    const std::string& _dbName, int _perfixLength)
+    const std::string& _dbName, int _prefixLength)
 {
     vector<string> columnFamilies{METADATA_COLUMN_NAME};
-    auto ret = createRocksDB(_dbName, _perfixLength, true, columnFamilies);
+    auto ret = createRocksDB(_dbName, _prefixLength, true, columnFamilies);
     assert(ret.first);
     assert(ret.second.size() == 2);
     // 0 is the default column family

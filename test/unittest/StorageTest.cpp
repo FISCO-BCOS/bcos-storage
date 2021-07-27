@@ -55,7 +55,7 @@ struct StorageFixture
         testTableInfo =
             std::make_shared<storage::TableInfo>(testTableName, testTableKey, "value1,value2");
         testTableInfo->newTable = true;
-        auto ret = factory->createRocksDB("test_db_2", RocksDBAdapter::TABLE_PERFIX_LENGTH);
+        auto ret = factory->createRocksDB("test_db_2", RocksDBAdapter::TABLE_PREFIX_LENGTH);
         kvDB = make_shared<KVDBImpl>(ret.first);
         storage = make_shared<StorageImpl>(memoryStorage, kvDB, 2, 1, 1);
     }

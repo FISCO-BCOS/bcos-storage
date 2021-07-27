@@ -41,7 +41,7 @@ const char* const METADATA_COLUMN_NAME = "meta";
 class RocksDBAdapter : public AdapterInterface
 {
 public:
-    static const int TABLE_PERFIX_LENGTH = 9;  //"t" + sizeof(int64_t) + "k"
+    static const int TABLE_PREFIX_LENGTH = 9;  //"t" + sizeof(int64_t) + "k"
     // using CryptHandler = std::function<void(std::string const&, std::string&)>;
     typedef std::shared_ptr<RocksDBAdapter> Ptr;
     explicit RocksDBAdapter(rocksdb::DB* _db, rocksdb::ColumnFamilyHandle* handler);
@@ -58,7 +58,7 @@ public:
         override;
 
 private:
-    inline std::pair<std::string, bool> getTablePerfix(const std::string& _tableName) const;
+    inline std::pair<std::string, bool> getTablePrefix(const std::string& _tableName) const;
     inline int64_t getNextTableID();
 
     inline Entry::Ptr vectorToEntry(
