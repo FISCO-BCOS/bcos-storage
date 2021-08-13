@@ -102,8 +102,8 @@ std::pair<std::string, bool> RocksDBAdapter::getTablePrefix(const std::string& _
     auto status = m_db->Get(ReadOptions(), m_metadataCF, Slice(_tableName), &value);
     if (!status.ok())
     {  // panic
-        STORAGE_LOG(ERROR) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("table not exist")
-                           << LOG_KV("name", _tableName) << LOG_KV("message", status.ToString());
+        STORAGE_LOG(WARNING) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("table not exist")
+                             << LOG_KV("name", _tableName) << LOG_KV("message", status.ToString());
         return std::make_pair("", false);
     }
     {  // insert into cache
@@ -156,6 +156,8 @@ Entry::Ptr RocksDBAdapter::getRow(const TableInfo::Ptr& _tableInfo, const std::s
     auto prefixPair = getTablePrefix(_tableInfo->name);
     if (!prefixPair.second)
     {
+        STORAGE_LOG(WARNING) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("getRow failed")
+                             << LOG_KV("name", _tableInfo->name) << LOG_KV("key", _key);
         return nullptr;
     }
     // construct the real key and get
@@ -190,6 +192,8 @@ std::map<std::string, Entry::Ptr> RocksDBAdapter::getRows(
     auto prefixPair = getTablePrefix(_tableInfo->name);
     if (!prefixPair.second)
     {
+        STORAGE_LOG(WARNING) << LOG_BADGE("RocksDBAdapter") << LOG_DESC("getRows failed")
+                             << LOG_KV("name", _tableInfo->name) << LOG_KV("key", _keys[0]);
         return ret;
     }
     auto tablePrefix = std::move(prefixPair.first);

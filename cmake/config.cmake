@@ -17,4 +17,5 @@ hunter_config(rocksdb VERSION 6.20.3
     PORTABLE=ON
     FAIL_ON_WARNINGS=OFF
     WITH_ZSTD=ON
+    BUILD_SHARED_LIBS=OFF
 )
