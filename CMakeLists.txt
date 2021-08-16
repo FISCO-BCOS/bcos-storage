@@ -12,7 +12,7 @@ FetchContent_Declare(bcos-cmake-scripts
     PREFIX ${CMAKE_SOURCE_DIR}/cmake/deps
     DOWNLOAD_NO_PROGRESS 1
     GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/bcos-cmake-scripts.git
-    GIT_TAG 08292fda15eea792a90254b3d1c4c80a7595c722
+    GIT_TAG dev
     SOURCE_DIR ${BCOS_CMAKE_SCRIPTS_DIR}
     LOG_CONFIGURE 1
     LOG_DOWNLOAD 1

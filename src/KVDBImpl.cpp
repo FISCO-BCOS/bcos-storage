@@ -102,7 +102,7 @@ std::shared_ptr<std::vector<std::string>> KVDBImpl::multiGet(
     {
         if (!status[i].ok())
         {
-            STORAGE_LOG(ERROR) << LOG_BADGE("KVDBImpl multiGet failed")
+            STORAGE_LOG(DEBUG) << LOG_BADGE("KVDBImpl multiGet failed")
                                << LOG_KV("message", status[i].ToString())
                                << LOG_KV("first key", _columnFamily)
                                << LOG_KV("second key", _keys[i]);
