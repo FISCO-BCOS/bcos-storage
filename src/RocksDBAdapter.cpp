@@ -301,58 +301,68 @@ std::pair<size_t, Error::Ptr> RocksDBAdapter::commitTables(
             }
         });
     auto assignID_time_cost = utcTime();
-    // process data cost a lot of time, parallel the serialization
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, _tableInfos.size()),
-        [&](const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i < range.end(); ++i)
-            {
-                auto tableInfo = _tableInfos[i];
-                string tablePrefix = TABLE_PREFIX;
-                auto prefixPair = getTablePrefix(tableInfo->name);
-                if (!prefixPair.second)
-                {  // panic
-                    STORAGE_LOG(FATAL)
-                        << LOG_BADGE("commitTables") << LOG_DESC("getTablePrefix failed")
-                        << LOG_KV("name", tableInfo->name);
-                }
-                tablePrefix = std::move(prefixPair.first);
-                // parallel process tables data, convert to map of key value string
-                auto tableData = _tableDatas[i];
-                tbb::parallel_for_each(tableData->begin(), tableData->end(),
-                    [&](std::pair<const std::string, Entry::Ptr>& data) {
-                        auto realKey = tablePrefix + TABLE_KEY_PREFIX + data.first;
-                        if (data.second->getStatus() == Entry::Status::DELETED)
-                        {  // deleted entry should use batch Delete
-                            tbb::spin_mutex::scoped_lock lock(batchMutex);
-                            writeBatch.Delete(Slice(realKey));
-                        }
-                        else
-                        {
-                            vector<string> values;
-                            values.reserve(data.second->size());
-                            values.emplace_back(data.second->getField(tableInfo->key));
-                            // TODO: write binary_oarchive for Entry to avoid construct values
-                            for (auto& columnName : tableInfo->fields)
-                            {
-                                values.emplace_back(data.second->getField(columnName));
-                            }
-                            values.emplace_back(to_string(data.second->getStatus()));
-                            values.emplace_back(to_string(data.second->num()));
-                            stringstream ss;
-                            boost::archive::binary_oarchive oa(ss);
-                            oa << values;
-                            auto realValue = ss.str();
-                            {
+    try
+    {
+        // process data cost a lot of time, parallel the serialization
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, _tableInfos.size()),
+            [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t i = range.begin(); i < range.end(); ++i)
+                {
+                    auto tableInfo = _tableInfos[i];
+                    string tablePrefix = TABLE_PREFIX;
+                    auto prefixPair = getTablePrefix(tableInfo->name);
+                    if (!prefixPair.second)
+                    {  // panic
+                        STORAGE_LOG(FATAL)
+                            << LOG_BADGE("RocksDBAdapter commitTables")
+                            << LOG_DESC("getTablePrefix failed") << LOG_KV("name", tableInfo->name);
+                        BOOST_THROW_EXCEPTION(
+                            std::runtime_error("getTablePrefix failed, " + tableInfo->name));
+                    }
+                    tablePrefix = std::move(prefixPair.first);
+                    // parallel process tables data, convert to map of key value string
+                    auto tableData = _tableDatas[i];
+                    tbb::parallel_for_each(tableData->begin(), tableData->end(),
+                        [&](std::pair<const std::string, Entry::Ptr>& data) {
+                            auto realKey = tablePrefix + TABLE_KEY_PREFIX + data.first;
+                            if (data.second->getStatus() == Entry::Status::DELETED)
+                            {  // deleted entry should use batch Delete
                                 tbb::spin_mutex::scoped_lock lock(batchMutex);
-                                writeBatch.Put(
-                                    Slice(realKey), Slice(realValue.data(), realValue.size()));
+                                writeBatch.Delete(Slice(realKey));
                             }
-                        }
-                        total.fetch_add(1);
-                    });
-                // TODO: maybe commit table to different column family according second path
-            }
-        });
+                            else
+                            {
+                                vector<string> values;
+                                values.reserve(data.second->size());
+                                values.emplace_back(data.second->getField(tableInfo->key));
+                                // TODO: write binary_oarchive for Entry to avoid construct values
+                                for (auto& columnName : tableInfo->fields)
+                                {
+                                    values.emplace_back(data.second->getField(columnName));
+                                }
+                                values.emplace_back(to_string(data.second->getStatus()));
+                                values.emplace_back(to_string(data.second->num()));
+                                stringstream ss;
+                                boost::archive::binary_oarchive oa(ss);
+                                oa << values;
+                                auto realValue = ss.str();
+                                {
+                                    tbb::spin_mutex::scoped_lock lock(batchMutex);
+                                    writeBatch.Put(
+                                        Slice(realKey), Slice(realValue.data(), realValue.size()));
+                                }
+                            }
+                            total.fetch_add(1);
+                        });
+                    // TODO: maybe commit table to different column family according second path
+                }
+            });
+    }
+    catch (const std::exception& e)
+    {
+        return {0, make_shared<Error>(StorageErrorCode::NotFound, e.what())};
+    }
+
     auto serialization_time_cost = utcTime();
     // commit current tableID in meta column family
     auto currentTableID = m_tableID.load();
