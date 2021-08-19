@@ -174,7 +174,7 @@ protected:
     tbb::concurrent_unordered_map<std::string, Cache::Ptr> m_caches;
     RWMutex m_cachesMutex;
     std::shared_ptr<std::thread> m_clearThread;
-    bool m_enableCache = true;
+    bool m_enableCache = false;
 };
 }  // namespace storage
 }  // namespace bcos
