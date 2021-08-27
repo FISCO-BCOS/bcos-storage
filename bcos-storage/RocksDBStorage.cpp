@@ -29,7 +29,7 @@
 using namespace bcos::storage;
 using namespace rocksdb;
 
-const char* const TABLE_KEY_PREFIX = ":";
+const char* const TABLE_KEY_SPLIT = ":";
 
 void RocksDBStorage::asyncGetPrimaryKeys(const TableInfo::Ptr& _tableInfo,
     const Condition::Ptr& _condition,
@@ -37,7 +37,7 @@ void RocksDBStorage::asyncGetPrimaryKeys(const TableInfo::Ptr& _tableInfo,
 {
     std::vector<std::string> result;
 
-    auto keyPrefix = _tableInfo->name + TABLE_KEY_PREFIX;
+    auto keyPrefix = _tableInfo->name + TABLE_KEY_SPLIT;
 
     ReadOptions read_options;
     read_options.auto_prefix_mode = true;
@@ -251,7 +251,7 @@ void RocksDBStorage::aysncRollback(
 std::string RocksDBStorage::toDBKey(const std::string_view& table, const std::string_view& key)
 {
     std::string dbKey;
-    dbKey.append(table).append(TABLE_KEY_PREFIX).append(key);
+    dbKey.append(table).append(TABLE_KEY_SPLIT).append(key);
 
     return dbKey;
 }
