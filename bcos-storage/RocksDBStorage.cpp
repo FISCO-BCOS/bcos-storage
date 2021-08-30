@@ -26,6 +26,7 @@
 #include <tbb/concurrent_vector.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
+#include <boost/archive/text_oarchive.hpp>
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/serialization/vector.hpp>
@@ -77,8 +78,9 @@ void RocksDBStorage::asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::st
     {
         PinnableSlice value;
         auto dbKey = toDBKey(_tableInfo, _key);
-        
-        auto status = m_db->Get(ReadOptions(), m_db->DefaultColumnFamily(), Slice(dbKey.data(), dbKey.size()), &value);
+
+        auto status = m_db->Get(
+            ReadOptions(), m_db->DefaultColumnFamily(), Slice(dbKey.data(), dbKey.size()), &value);
 
         if (!status.ok())
         {
@@ -113,8 +115,7 @@ void RocksDBStorage::asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::st
     {
         // TODO: _callback(BCOS_ERROR_WITH_PREV_PTR(-1, "Get row failed!", e),
         // nullptr);
-        _callback(
-            std::make_shared<bcos::Error>(BCOS_ERROR_WITH_PREV(-1, "Get row failed!", e)), nullptr);
+        _callback(BCOS_ERROR_WITH_PREV_PTR(-1, "Get row failed!", e), nullptr);
     }
 }
 
@@ -137,8 +138,8 @@ void RocksDBStorage::asyncGetRows(const TableInfo::Ptr& _tableInfo,
 
         std::vector<PinnableSlice> values(_keys.size());
         std::vector<Status> statusList(_keys.size());
-        m_db->MultiGet(
-            ReadOptions(), m_db->DefaultColumnFamily(), slices.size(), slices.data(), values.data(), statusList.data());
+        m_db->MultiGet(ReadOptions(), m_db->DefaultColumnFamily(), slices.size(), slices.data(),
+            values.data(), statusList.data());
 
         std::vector<Entry::Ptr> entries(_keys.size());
         tbb::parallel_for(tbb::blocked_range<size_t>(0, _keys.size()),
@@ -187,13 +188,23 @@ void RocksDBStorage::asyncSetRow(const TableInfo::Ptr& tableInfo, const std::str
     {
         auto dbKey = toDBKey(tableInfo, key);
 
+        auto& data = entry->fields();
+
         std::string value;
         boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(
             value);
         boost::archive::binary_oarchive archive(outputStream);
 
-        auto& data = entry->fields();
         archive << data;
+        outputStream.close();
+
+        std::string textValue;
+        boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>>
+            textOutputStream(textValue);
+        boost::archive::text_oarchive textArchive(textOutputStream);
+        textArchive << data;
+
+        textOutputStream.close();
 
         WriteOptions options;
         auto status = m_db->Put(WriteOptions(), dbKey, value);
