@@ -33,6 +33,7 @@ class RocksDBStorage : public TransactionalStorageInterface
 {
 public:
     using Ptr = std::shared_ptr<RocksDBStorage>;
+    RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db) : m_db(std::move(db)) {}
 
     explicit RocksDBStorage();
     ~RocksDBStorage() {}
@@ -60,7 +61,7 @@ public:
         std::function<void(Error::Ptr&&)> callback) noexcept override;
 
 private:
-    std::string toDBKey(const std::string_view& table, const std::string_view& key);
+    std::string toDBKey(TableInfo::Ptr tableInfo, const std::string_view& key);
 
     std::unique_ptr<rocksdb::DB> m_db;
 };
