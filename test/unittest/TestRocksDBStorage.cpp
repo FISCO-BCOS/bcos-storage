@@ -96,18 +96,26 @@ BOOST_AUTO_TEST_CASE(asyncGetRow)
         });
         */
 
-
     for (size_t i = 0; i != 1050; ++i)
     {
         std::string key = "key" + boost::lexical_cast<std::string>(i);
         rocksDBStorage->asyncGetRow(nullptr, key, [&](Error::Ptr&& error, Entry::Ptr&& entry) {
             BOOST_CHECK_EQUAL(error, nullptr);
-            BOOST_CHECK_NE(entry, nullptr);
+            if (i < 1000)
+            {
+                BOOST_CHECK_NE(entry, nullptr);
 
-            auto& data = entry->fields();
-            auto fields = std::vector<std::string>({"value_" + boost::lexical_cast<std::string>(i),
-                "value1", "value2", "value3", "value4", "value5"});
-            BOOST_CHECK_EQUAL_COLLECTIONS(data.begin(), data.end(), fields.begin(), fields.end());
+                auto& data = entry->fields();
+                auto fields =
+                    std::vector<std::string>({"value_" + boost::lexical_cast<std::string>(i),
+                        "value1", "value2", "value3", "value4", "value5"});
+                BOOST_CHECK_EQUAL_COLLECTIONS(
+                    data.begin(), data.end(), fields.begin(), fields.end());
+            }
+            else
+            {
+                BOOST_CHECK_EQUAL(entry, nullptr);
+            }
         });
     }
     cleanupNonTableData();

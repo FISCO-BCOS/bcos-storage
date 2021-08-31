@@ -24,6 +24,7 @@
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>
 #include <tbb/concurrent_vector.h>
+#include <boost/archive/basic_archive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
@@ -56,6 +57,8 @@ void RocksDBStorage::asyncGetPrimaryKeys(const TableInfo::Ptr& _tableInfo,
     ReadOptions read_options;
     read_options.auto_prefix_mode = true;
     auto iter = m_db->NewIterator(read_options);
+
+    // TODO: prefix in get primarykeys
     for (iter->Seek(keyPrefix); iter->Valid() && iter->key().starts_with(keyPrefix); iter->Next())
     {
         size_t start = keyPrefix.size();
@@ -90,9 +93,12 @@ void RocksDBStorage::asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::st
                 return;
             }
 
-            std::string errorMessage = "RocksDB get failed!, " +
-                                       boost::lexical_cast<std::string>(status.subcode()) + " " +
-                                       status.getState();
+            std::string errorMessage =
+                "RocksDB get failed!, " + boost::lexical_cast<std::string>(status.subcode());
+            if (status.getState())
+            {
+                errorMessage.append(" ").append(status.getState());
+            }
             _callback(BCOS_ERROR_PTR(-1, errorMessage), nullptr);
 
             return;
@@ -102,7 +108,8 @@ void RocksDBStorage::asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::st
 
         boost::iostreams::stream<boost::iostreams::array_source> inputStream(
             value.data(), value.size());
-        boost::archive::binary_iarchive archive(inputStream);
+        boost::archive::binary_iarchive archive(inputStream,
+            boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
 
         std::vector<std::string> fields;
         archive >> fields;
@@ -155,7 +162,9 @@ void RocksDBStorage::asyncGetRows(const TableInfo::Ptr& _tableInfo,
 
                         boost::iostreams::stream<boost::iostreams::array_source> inputStream(
                             value.data(), value.size());
-                        boost::archive::binary_iarchive archive(inputStream);
+                        boost::archive::binary_iarchive archive(
+                            inputStream, boost::archive::no_header | boost::archive::no_codecvt |
+                                             boost::archive::no_tracking);
 
                         std::vector<std::string> fields;
                         archive >> fields;
@@ -166,7 +175,19 @@ void RocksDBStorage::asyncGetRows(const TableInfo::Ptr& _tableInfo,
                     }
                     else
                     {
-                        STORAGE_LOG(WARNING) << "Multi get rows error: " << status.getState();
+                        if (status.IsNotFound())
+                        {
+                            STORAGE_LOG(WARNING) << "Multi get rows, not found key: " << _keys[i];
+                        }
+                        else if (status.getState())
+                        {
+                            STORAGE_LOG(WARNING) << "Multi get rows error: " << status.getState();
+                        }
+                        else
+                        {
+                            STORAGE_LOG(WARNING) << "Multi get rows unknown error";
+                        }
+
                         entries[i] = nullptr;
                     }
                 }
@@ -193,25 +214,22 @@ void RocksDBStorage::asyncSetRow(const TableInfo::Ptr& tableInfo, const std::str
         std::string value;
         boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(
             value);
-        boost::archive::binary_oarchive archive(outputStream);
+        boost::archive::binary_oarchive archive(outputStream,
+            boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
 
         archive << data;
-        outputStream.close();
-
-        std::string textValue;
-        boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>>
-            textOutputStream(textValue);
-        boost::archive::text_oarchive textArchive(textOutputStream);
-        textArchive << data;
-
-        textOutputStream.close();
+        outputStream.flush();
 
         WriteOptions options;
         auto status = m_db->Put(WriteOptions(), dbKey, value);
         if (!status.ok())
         {
-            callback(
-                BCOS_ERROR_PTR(-1, std::string("Set row failed! ") + status.getState()), false);
+            std::string errorMessage = "Set row failed!";
+            if (status.getState())
+            {
+                errorMessage.append(" ").append(status.getState());
+            }
+            callback(BCOS_ERROR_PTR(-1, errorMessage), false);
             return;
         }
 
@@ -219,8 +237,7 @@ void RocksDBStorage::asyncSetRow(const TableInfo::Ptr& tableInfo, const std::str
     }
     catch (const std::exception& e)
     {
-        callback(
-            std::make_shared<bcos::Error>(BCOS_ERROR_WITH_PREV(-1, "Set row failed! ", e)), false);
+        callback(BCOS_ERROR_WITH_PREV_PTR(-1, "Set row failed! ", e), false);
     }
 }
 
@@ -243,7 +260,9 @@ void RocksDBStorage::asyncPrepare(const PrepareParams&,
                 std::string value;
                 boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>>
                     outputStream(value);
-                boost::archive::binary_oarchive archive(outputStream);
+                boost::archive::binary_oarchive archive(
+                    outputStream, boost::archive::no_header | boost::archive::no_codecvt |
+                                      boost::archive::no_tracking);
 
                 auto data = entry->fields();
                 archive << data;
@@ -260,7 +279,7 @@ void RocksDBStorage::asyncPrepare(const PrepareParams&,
     }
     catch (const std::exception& e)
     {
-        callback(std::make_shared<bcos::Error>(BCOS_ERROR_WITH_PREV(-1, "Prepare failed! ", e)));
+        callback(BCOS_ERROR_WITH_PREV_PTR(-1, "Prepare failed! ", e));
     }
 }
 
