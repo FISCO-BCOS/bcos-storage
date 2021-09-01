@@ -3,7 +3,12 @@
 #include "boost/filesystem.hpp"
 #include "interfaces/storage/StorageInterface.h"
 #include <tbb/concurrent_vector.h>
+#include <boost/archive/binary_iarchive.hpp>
+#include <boost/archive/binary_oarchive.hpp>
+#include <boost/iostreams/device/back_inserter.hpp>
+#include <boost/iostreams/stream.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/serialization/vector.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 
@@ -189,10 +194,16 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
                 sortedKeys.begin(), sortedKeys.end(), keys.begin(), keys.end());
         });
 
+    rocksDBStorage->asyncGetRow(tableInfo, "newkey" + boost::lexical_cast<std::string>(1050),
+        [&](Error::Ptr&& error, Entry::Ptr&& entry) {
+            BOOST_CHECK_EQUAL(error, nullptr);
+            BOOST_CHECK_NE(entry, nullptr);
+        });
+
     // clean new data
     for (size_t i = 0; i < 1000; ++i)
     {
-        std::string key = "key" + boost::lexical_cast<std::string>(i + 1000);
+        std::string key = "newkey" + boost::lexical_cast<std::string>(i + 1000);
         auto entry = std::make_shared<Entry>();
         entry->setStatus(Entry::DELETED);
 
@@ -201,6 +212,19 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
             BOOST_CHECK_EQUAL(success, true);
         });
     }
+
+    rocksDBStorage->asyncGetRow(tableInfo, "newkey" + boost::lexical_cast<std::string>(1050),
+        [&](Error::Ptr&& error, Entry::Ptr&& entry) {
+            BOOST_CHECK_EQUAL(error, nullptr);
+            BOOST_CHECK_EQUAL(entry, nullptr);
+        });
+
+    // check if the data is deleted
+    rocksDBStorage->asyncGetPrimaryKeys(
+        tableInfo, nullptr, [](Error::Ptr&& error, std::vector<std::string>&& keys) {
+            BOOST_CHECK_EQUAL(error, nullptr);
+            BOOST_CHECK_EQUAL(keys.size(), 0);
+        });
 
     cleanupNonTableData();
 }
@@ -287,7 +311,7 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
         auto entry2 = table2->newEntry();
         auto key2 = "key" + boost::lexical_cast<std::string>(i);
         entry2->setField("value3", "hello world!" + boost::lexical_cast<std::string>(i));
-        table2->setRow(key2, entry);
+        table2->setRow(key2, entry2);
         table2Keys.push_back(key2);
     }
 
@@ -302,6 +326,18 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
             std::sort(table1Keys.begin(), table1Keys.end());
             BOOST_CHECK_EQUAL_COLLECTIONS(
                 table1Keys.begin(), table1Keys.end(), keys.begin(), keys.end());
+
+            rocksDBStorage->asyncGetRows(table1->tableInfo(), table1Keys,
+                [&](Error::Ptr&& error, std::vector<Entry::Ptr>&& entries) {
+                    BOOST_CHECK_EQUAL(error, nullptr);
+                    BOOST_CHECK_EQUAL(entries.size(), 10);
+
+                    for (size_t i = 0; i < 10; ++i)
+                    {
+                        BOOST_CHECK_EQUAL(entries[i]->getField("value1"),
+                            std::string("hello world!") + table1Keys[i][3]);
+                    }
+                });
         });
 
     rocksDBStorage->asyncGetPrimaryKeys(
@@ -312,9 +348,53 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
             std::sort(table2Keys.begin(), table2Keys.end());
             BOOST_CHECK_EQUAL_COLLECTIONS(
                 table2Keys.begin(), table2Keys.end(), keys.begin(), keys.end());
+
+            rocksDBStorage->asyncGetRows(table2->tableInfo(), table2Keys,
+                [&](Error::Ptr&& error, std::vector<Entry::Ptr>&& entries) {
+                    BOOST_CHECK_EQUAL(error, nullptr);
+                    BOOST_CHECK_EQUAL(entries.size(), 10);
+
+                    for (size_t i = 0; i < 10; ++i)
+                    {
+                        BOOST_CHECK_EQUAL(entries[i]->getField("value3"),
+                            std::string("hello world!") + table2Keys[i][3]);
+                    }
+                });
         });
 
     cleanupNonTableData();
+}
+
+BOOST_AUTO_TEST_CASE(boostSerialize)
+{
+    // encode the vector
+    std::vector<std::string> forEncode(5);
+    forEncode[3] = "hello world!";
+
+    std::string buffer;
+    boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(
+        buffer);
+    boost::archive::binary_oarchive archive(outputStream,
+        boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
+
+    archive << forEncode;
+    outputStream.flush();
+
+    std::cout << forEncode << std::endl;
+
+    // decode the vector
+    boost::iostreams::stream<boost::iostreams::array_source> inputStream(
+        buffer.data(), buffer.size());
+    boost::archive::binary_iarchive archive2(inputStream,
+        boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
+
+    std::vector<std::string> forDecode;
+    archive2 >> forDecode;
+
+    std::cout << forDecode;
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        forEncode.begin(), forEncode.end(), forDecode.begin(), forDecode.end());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

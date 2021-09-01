@@ -190,7 +190,16 @@ void RocksDBStorage::asyncSetRow(const TableInfo::Ptr& tableInfo, const std::str
         std::string value = encodeEntry(entry);
 
         WriteOptions options;
-        auto status = m_db->Put(WriteOptions(), dbKey, value);
+        rocksdb::Status status;
+        if (entry->status() == Entry::DELETED)
+        {
+            status = m_db->Delete(options, dbKey);
+        }
+        else
+        {
+            status = m_db->Put(options, dbKey, value);
+        }
+
         if (!status.ok())
         {
             std::string errorMessage = "Set row failed!";
@@ -228,7 +237,7 @@ void RocksDBStorage::asyncPrepare(const PrepareParams&,
             {
                 std::string value = encodeEntry(entry);
 
-                PinnableSlice slice(&value);
+                // PinnableSlice slice(&value);
                 auto status = writeBatch.Put(dbKey, value);
             }
             return true;
