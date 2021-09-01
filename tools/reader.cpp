@@ -19,9 +19,8 @@
  * @date 2020-06-29
  */
 
-#include "bcos-framework/libtable/TableFactory.h"
-#include "bcos-storage/RocksDBAdapter.h"
-#include "bcos-storage/RocksDBAdapterFactory.h"
+#include "RocksDBStorage.h"
+#include "bcos-framework/libtable/TableStorage.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
@@ -30,8 +29,10 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/program_options.hpp>
 #include <boost/property_tree/ptree.hpp>
+#include <boost/throw_exception.hpp>
 #include <cstdlib>
 #include <functional>
 
@@ -50,8 +51,8 @@ po::variables_map initCommandLine(int argc, const char* argv[])
     main_options.add_options()("help,h", "help of Table benchmark")(
         "path,p", po::value<string>()->default_value(""), "[RocksDB path]")("name,n",
         po::value<string>()->default_value(""), "[RocksDB name]")("table,t", po::value<string>(),
-        "table name ")("key,k", po::value<string>()->default_value(""), "table key")("iterate,i",
-        po::value<bool>()->default_value(false), "traverse table");
+        "table name ")("key,k", po::value<string>()->default_value(""), "table key")(
+        "iterate,i", po::value<bool>()->default_value(false), "traverse table");
     po::variables_map vm;
     try
     {
@@ -88,27 +89,62 @@ int main(int argc, const char* argv[])
 
     cout << "rocksdb path : " << storagePath << endl;
     cout << "tableName    : " << tableName << endl;
-    auto factory = make_shared<RocksDBAdapterFactory>(storagePath);
-    auto adapter = factory->createAdapter(storageName, RocksDBAdapter::TABLE_PREFIX_LENGTH);
-    assert(adapter);
-    auto sysTableInfo = getSysTableInfo(SYS_TABLE);
+    // auto factory = make_shared<RocksDBAdapterFactory>(storagePath);
+
+    rocksdb::DB* db;
+    rocksdb::Options options;
+    options.IncreaseParallelism();
+    options.OptimizeLevelStyleCompaction();
+    options.create_if_missing = false;
+    rocksdb::Status s = rocksdb::DB::Open(options, storagePath, &db);
+
+    auto adapter = std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db));
+
+    auto sysTableInfo = std::make_shared<storage::TableInfo>(tableName, TableStorage::SYS_TABLE_KEY,
+        std::string(TableStorage::SYS_TABLE_KEY_FIELDS) + "," +
+            TableStorage::SYS_TABLE_VALUE_FIELDS);
+    ;
     TableInfo::Ptr tableInfo = sysTableInfo;
-    if (tableName != SYS_TABLE)
+    if (tableName != TableStorage::SYS_TABLES)
     {
-        auto entry = adapter->getRow(sysTableInfo, tableName);
+        std::promise<Entry::Ptr> entryPromise;
+        adapter->asyncGetRow(sysTableInfo, tableName, [&](Error::Ptr&& error, Entry::Ptr&& entry) {
+            if (error)
+            {
+                BOOST_THROW_EXCEPTION(*error);
+            }
+            entryPromise.set_value(std::move(entry));
+        });
+
+        auto entry = entryPromise.get_future().get();
+
         if (!entry)
         {
             cout << tableName << " doesn't exist in DB:" << storagePath + "/" + storageName << endl;
             exit(1);
         }
 
-        tableInfo = make_shared<TableInfo>(tableName, entry->getField(SYS_TABLE_KEY_FIELDS),
-            entry->getField(SYS_TABLE_VALUE_FIELDS));
+        tableInfo =
+            make_shared<TableInfo>(tableName, entry->getField(TableStorage::SYS_TABLE_KEY_FIELDS),
+                entry->getField(TableStorage::SYS_TABLE_VALUE_FIELDS));
     }
     if (iterate)
     {
         cout << "iterator " << tableInfo->name << endl;
-        auto keys = adapter->getPrimaryKeys(tableInfo, nullptr);
+
+        std::promise<std::vector<std::string>> keysPromise;
+        adapter->asyncGetPrimaryKeys(
+            tableInfo, nullptr, [&](Error::Ptr&& error, std::vector<std::string>&& keys) {
+                if (error)
+                {
+                    BOOST_THROW_EXCEPTION(*error);
+                }
+
+                keysPromise.set_value(std::move(keys));
+            });
+
+        auto keys = keysPromise.get_future().get();
+
         if (keys.empty())
         {
             cout << tableName << " is empty" << endl;
@@ -118,23 +154,43 @@ int main(int argc, const char* argv[])
         for (auto& k : keys)
         {
             cout << "key=" << k << "|";
-            auto row = adapter->getRow(tableInfo, k);
+
+            std::promise<Entry::Ptr> rowPromise;
+            adapter->asyncGetRow(tableInfo, k, [&](Error::Ptr&& error, Entry::Ptr&& entry) {
+                if (error)
+                {
+                    BOOST_THROW_EXCEPTION(*error);
+                }
+
+                rowPromise.set_value(std::move(entry));
+            });
+            auto row = rowPromise.get_future().get();
+
             for (auto& it : *row)
             {
-                cout << " [" << it.first << ":" << it.second << "] ";
+                cout << " [" << it << "] ";
             }
-            cout << " [status=" << row->getStatus() << "]"
+            cout << " [status=" << row->status() << "]"
                  << " [num=" << row->num() << "]";
             cout << endl;
         }
         return 0;
     }
-    auto row = adapter->getRow(tableInfo, key);
+    std::promise<Entry::Ptr> rowPromise;
+    adapter->asyncGetRow(tableInfo, key, [&](Error::Ptr&& error, Entry::Ptr&& entry) {
+        if (error)
+        {
+            BOOST_THROW_EXCEPTION(*error);
+        }
+
+        rowPromise.set_value(std::move(entry));
+    });
+    auto row = rowPromise.get_future().get();
     for (auto& it : *row)
     {
-        cout << "[" << it.first << ":" << it.second << "]";
+        cout << "[" << it << "]";
     }
-    cout << " [status=" << row->getStatus() << "]"
+    cout << " [status=" << row->status() << "]"
          << " [num=" << row->num() << "]" << endl;
     return 0;
 }
