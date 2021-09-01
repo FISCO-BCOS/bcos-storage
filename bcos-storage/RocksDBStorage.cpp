@@ -25,6 +25,7 @@
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>
 #include <tbb/concurrent_vector.h>
+#include <tbb/spin_mutex.h>
 #include <boost/archive/basic_archive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -226,18 +227,22 @@ void RocksDBStorage::asyncPrepare(const PrepareParams&,
     try
     {
         rocksdb::WriteBatch writeBatch;
+
+        tbb::spin_mutex writeMutex;
         storage->parallelTraverse(true, [&](const TableInfo::Ptr& tableInfo, const std::string& key,
                                             const Entry::ConstPtr& entry) {
             auto dbKey = toDBKey(tableInfo, key);
+
             if (entry->status() == Entry::DELETED)
             {
+                tbb::spin_mutex::scoped_lock lock(writeMutex);
                 writeBatch.Delete(dbKey);
             }
             else
             {
                 std::string value = encodeEntry(entry);
 
-                // PinnableSlice slice(&value);
+                tbb::spin_mutex::scoped_lock lock(writeMutex);
                 auto status = writeBatch.Put(dbKey, value);
             }
             return true;

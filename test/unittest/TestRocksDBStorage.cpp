@@ -2,6 +2,8 @@
 #include "bcos-framework/libtable/TableStorage.h"
 #include "boost/filesystem.hpp"
 #include "interfaces/storage/StorageInterface.h"
+#include "libutilities/DataConvertUtility.h"
+#include <rocksdb/write_batch.h>
 #include <tbb/concurrent_vector.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -395,6 +397,57 @@ BOOST_AUTO_TEST_CASE(boostSerialize)
 
     BOOST_CHECK_EQUAL_COLLECTIONS(
         forEncode.begin(), forEncode.end(), forDecode.begin(), forDecode.end());
+}
+
+BOOST_AUTO_TEST_CASE(rocksDBiter)
+{
+    std::string testPath = "./iterDBTest";
+
+    rocksdb::DB* db;
+    rocksdb::Options options;
+    // Optimize RocksDB. This is the easiest way to get RocksDB to perform well
+    options.IncreaseParallelism();
+    options.OptimizeLevelStyleCompaction();
+    // create the DB if it's not already present
+    options.create_if_missing = true;
+
+    // open DB
+    rocksdb::Status s = rocksdb::DB::Open(options, testPath, &db);
+    BOOST_CHECK_EQUAL(s.ok(), true);
+
+    for (uint32_t i = 0; i < 10; ++i)
+    {
+        rocksdb::WriteBatch writeBatch;
+
+        for (size_t j = 0; j != 1000; ++j)
+        {
+            std::string key = *(bcos::toHexString(std::string((char*)&i, sizeof(i)))) + "_key_" +
+                              boost::lexical_cast<std::string>(j);
+            std::string value = "hello world!";
+
+            writeBatch.Put(key, value);
+        }
+
+        db->Write(rocksdb::WriteOptions(), &writeBatch);
+
+        rocksdb::ReadOptions read_options;
+        read_options.total_order_seek = true;
+        auto iter = db->NewIterator(read_options);
+
+        size_t total = 0;
+        for (iter->SeekToFirst(); iter->Valid(); iter->Next())
+        {
+            ++total;
+        }
+        delete iter;
+
+        BOOST_CHECK_EQUAL(total, 1000 * (i + 1));
+    }
+
+    if (boost::filesystem::exists(testPath))
+    {
+        boost::filesystem::remove_all(testPath);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
