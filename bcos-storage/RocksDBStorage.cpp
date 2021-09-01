@@ -20,6 +20,7 @@
  */
 #include "RocksDBStorage.h"
 #include "bcos-framework/libutilities/Error.h"
+#include "interfaces/protocol/ProtocolTypeDef.h"
 #include <rocksdb/cleanable.h>
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>
@@ -55,10 +56,11 @@ void RocksDBStorage::asyncGetPrimaryKeys(const TableInfo::Ptr& _tableInfo,
     }
 
     ReadOptions read_options;
-    read_options.auto_prefix_mode = true;
+    read_options.total_order_seek = true;
     auto iter = m_db->NewIterator(read_options);
 
     // TODO: prefix in get primarykeys
+    // TODO: check performance
     for (iter->Seek(keyPrefix); iter->Valid() && iter->key().starts_with(keyPrefix); iter->Next())
     {
         size_t start = keyPrefix.size();
@@ -104,17 +106,7 @@ void RocksDBStorage::asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::st
             return;
         }
 
-        auto entry = std::make_shared<Entry>(_tableInfo, 0);
-
-        boost::iostreams::stream<boost::iostreams::array_source> inputStream(
-            value.data(), value.size());
-        boost::archive::binary_iarchive archive(inputStream,
-            boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
-
-        std::vector<std::string> fields;
-        archive >> fields;
-
-        entry->importFields(std::move(fields));
+        auto entry = decodeEntry(_tableInfo, 0, value.ToStringView());
 
         _callback(nullptr, std::move(entry));
     }
@@ -158,20 +150,7 @@ void RocksDBStorage::asyncGetRows(const TableInfo::Ptr& _tableInfo,
 
                     if (status.ok())
                     {
-                        auto entry = std::make_shared<Entry>(_tableInfo, 0);
-
-                        boost::iostreams::stream<boost::iostreams::array_source> inputStream(
-                            value.data(), value.size());
-                        boost::archive::binary_iarchive archive(
-                            inputStream, boost::archive::no_header | boost::archive::no_codecvt |
-                                             boost::archive::no_tracking);
-
-                        std::vector<std::string> fields;
-                        archive >> fields;
-
-                        entry->importFields(std::move(fields));
-
-                        entries[i] = std::move(entry);
+                        entries[i] = decodeEntry(_tableInfo, 0, value.ToStringView());
                     }
                     else
                     {
@@ -208,17 +187,7 @@ void RocksDBStorage::asyncSetRow(const TableInfo::Ptr& tableInfo, const std::str
     try
     {
         auto dbKey = toDBKey(tableInfo, key);
-
-        auto& data = entry->fields();
-
-        std::string value;
-        boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(
-            value);
-        boost::archive::binary_oarchive archive(outputStream,
-            boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
-
-        archive << data;
-        outputStream.flush();
+        std::string value = encodeEntry(entry);
 
         WriteOptions options;
         auto status = m_db->Put(WriteOptions(), dbKey, value);
@@ -257,15 +226,7 @@ void RocksDBStorage::asyncPrepare(const PrepareParams&,
             }
             else
             {
-                std::string value;
-                boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>>
-                    outputStream(value);
-                boost::archive::binary_oarchive archive(
-                    outputStream, boost::archive::no_header | boost::archive::no_codecvt |
-                                      boost::archive::no_tracking);
-
-                auto data = entry->fields();
-                archive << data;
+                std::string value = encodeEntry(entry);
 
                 PinnableSlice slice(&value);
                 auto status = writeBatch.Put(dbKey, value);
@@ -309,4 +270,36 @@ std::string RocksDBStorage::toDBKey(TableInfo::Ptr tableInfo, const std::string_
         dbKey.append(TABLE_KEY_SPLIT).append(key);
         return dbKey;
     }
+}
+
+std::string RocksDBStorage::encodeEntry(const Entry::ConstPtr& entry)
+{
+    std::string value;
+    boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
+    boost::archive::binary_oarchive archive(outputStream,
+        boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
+
+    auto& data = entry->fields();
+    archive << data;
+    outputStream.flush();
+
+    return value;
+}
+
+Entry::Ptr RocksDBStorage::decodeEntry(TableInfo::Ptr tableInfo,
+    bcos::protocol::BlockNumber blockNumber, const std::string_view& buffer)
+{
+    auto entry = std::make_shared<Entry>(tableInfo, blockNumber);
+
+    boost::iostreams::stream<boost::iostreams::array_source> inputStream(
+        buffer.data(), buffer.size());
+    boost::archive::binary_iarchive archive(inputStream,
+        boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
+
+    std::vector<std::string> fields;
+    archive >> fields;
+
+    entry->importFields(std::move(fields));
+
+    return entry;
 }

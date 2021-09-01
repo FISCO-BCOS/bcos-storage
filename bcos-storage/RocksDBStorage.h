@@ -63,6 +63,10 @@ public:
 private:
     std::string toDBKey(TableInfo::Ptr tableInfo, const std::string_view& key);
 
+    std::string encodeEntry(const Entry::ConstPtr& entry);
+    Entry::Ptr decodeEntry(TableInfo::Ptr tableInfo, bcos::protocol::BlockNumber blockNumber,
+        const std::string_view& buffer);
+
     std::unique_ptr<rocksdb::DB> m_db;
 };
 }  // namespace bcos::storage
