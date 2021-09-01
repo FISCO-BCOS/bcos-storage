@@ -103,7 +103,6 @@ int main(int argc, const char* argv[])
     auto sysTableInfo = std::make_shared<storage::TableInfo>(tableName, TableStorage::SYS_TABLE_KEY,
         std::string(TableStorage::SYS_TABLE_KEY_FIELDS) + "," +
             TableStorage::SYS_TABLE_VALUE_FIELDS);
-    ;
     TableInfo::Ptr tableInfo = sysTableInfo;
     if (tableName != TableStorage::SYS_TABLES)
     {
