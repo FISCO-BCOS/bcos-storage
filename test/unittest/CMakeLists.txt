@@ -23,14 +23,13 @@ set(TEST_BINARY_NAME test-bcos-storage)
 config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
-target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../../src ../../include)
+target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../../bcos-storage)
 
 find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
-find_package(wedpr-crypto CONFIG QUIET REQUIRED)
 
 target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework ${STORAGE_TARGET} bcos-framework::utilities
                         bcos-framework::protocol bcos-framework::protocol-pb bcos-framework::codec
-                        bcos-framework::table wedpr-crypto::crypto)
+                        bcos-framework::table)
 
 # for code coverage
 if (COVERAGE)
