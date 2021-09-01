@@ -48,16 +48,16 @@ public:
         std::function<void(Error::Ptr&&, std::vector<Entry::Ptr>&&)> _callback) noexcept override;
 
     void asyncSetRow(const TableInfo::Ptr& tableInfo, const std::string& key,
-        const Entry::Ptr& entry,
+        const Entry::ConstPtr& entry,
         std::function<void(Error::Ptr&&, bool)> callback) noexcept override;
 
     void asyncPrepare(const PrepareParams& params, const TraverseStorageInterface::Ptr& storage,
         std::function<void(Error::Ptr&&)> callback) noexcept override;
 
-    void aysncCommit(protocol::BlockNumber blockNumber,
+    void asyncCommit(protocol::BlockNumber blockNumber,
         std::function<void(Error::Ptr&&)> callback) noexcept override;
 
-    void aysncRollback(protocol::BlockNumber blockNumber,
+    void asyncRollback(protocol::BlockNumber blockNumber,
         std::function<void(Error::Ptr&&)> callback) noexcept override;
 
 private:

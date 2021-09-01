@@ -182,7 +182,7 @@ void RocksDBStorage::asyncGetRows(const TableInfo::Ptr& _tableInfo,
 }
 
 void RocksDBStorage::asyncSetRow(const TableInfo::Ptr& tableInfo, const std::string& key,
-    const Entry::Ptr& entry, std::function<void(Error::Ptr&&, bool)> callback) noexcept
+    const Entry::ConstPtr& entry, std::function<void(Error::Ptr&&, bool)> callback) noexcept
 {
     try
     {
@@ -253,13 +253,13 @@ void RocksDBStorage::asyncPrepare(const PrepareParams&,
     }
 }
 
-void RocksDBStorage::aysncCommit(
+void RocksDBStorage::asyncCommit(
     protocol::BlockNumber, std::function<void(Error::Ptr&&)> callback) noexcept
 {
     callback(nullptr);
 }
 
-void RocksDBStorage::aysncRollback(
+void RocksDBStorage::asyncRollback(
     protocol::BlockNumber, std::function<void(Error::Ptr&&)> callback) noexcept
 {
     callback(nullptr);
