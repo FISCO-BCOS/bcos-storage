@@ -60,7 +60,7 @@ set(STORAGE_TARGET "bcos-storage")
 add_subdirectory(bcos-storage)
 
 install(
-    DIRECTORY "include/bcos-storage"
+    DIRECTORY "bcos-storage"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/bcos-storage"
     FILES_MATCHING PATTERN "*.h"
 )

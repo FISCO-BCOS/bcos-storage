@@ -24,8 +24,8 @@
 
 #pragma once
 
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "rocksdb/db.h"
+#include <bcos-framework/interfaces/storage/StorageInterface.h>
+#include <rocksdb/db.h>
 
 namespace bcos::storage
 {
@@ -33,9 +33,8 @@ class RocksDBStorage : public TransactionalStorageInterface
 {
 public:
     using Ptr = std::shared_ptr<RocksDBStorage>;
-    RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db) : m_db(std::move(db)) {}
+    explicit RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db) : m_db(std::move(db)) {}
 
-    explicit RocksDBStorage();
     ~RocksDBStorage() {}
 
     void asyncGetPrimaryKeys(const TableInfo::Ptr& _tableInfo, const Condition::Ptr& _condition,
