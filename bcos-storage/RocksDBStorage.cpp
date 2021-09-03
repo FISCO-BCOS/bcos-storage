@@ -17,6 +17,9 @@
  * @file Storage.h
  * @author: xingqiangbai
  * @date: 2021-04-16
+ * @file Storage.h
+ * @author: ancelmo
+ * @date: 2021-09-2
  */
 #include "RocksDBStorage.h"
 #include "bcos-framework/libutilities/Error.h"
@@ -40,8 +43,8 @@ using namespace rocksdb;
 
 const char* const TABLE_KEY_SPLIT = ":";
 
-void RocksDBStorage::asyncGetPrimaryKeys(const TableInfo::Ptr& _tableInfo,
-    const Condition::Ptr& _condition,
+void RocksDBStorage::asyncGetPrimaryKeys(const TableInfo::ConstPtr& _tableInfo,
+    const std::optional<Condition const>& _condition,
     std::function<void(Error::Ptr&&, std::vector<std::string>&&)> _callback) noexcept
 {
     std::vector<std::string> result;
@@ -77,8 +80,8 @@ void RocksDBStorage::asyncGetPrimaryKeys(const TableInfo::Ptr& _tableInfo,
     _callback(nullptr, std::move(result));
 }
 
-void RocksDBStorage::asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::string& _key,
-    std::function<void(Error::Ptr&&, Entry::Ptr&&)> _callback) noexcept
+void RocksDBStorage::asyncGetRow(const TableInfo::ConstPtr& _tableInfo, const std::string& _key,
+    std::function<void(Error::Ptr&&, std::optional<Entry>&&)> _callback) noexcept
 {
     try
     {
@@ -92,7 +95,7 @@ void RocksDBStorage::asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::st
         {
             if (status.IsNotFound())
             {
-                _callback(nullptr, nullptr);
+                _callback(nullptr, {});
                 return;
             }
 
@@ -102,7 +105,7 @@ void RocksDBStorage::asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::st
             {
                 errorMessage.append(" ").append(status.getState());
             }
-            _callback(BCOS_ERROR_PTR(-1, errorMessage), nullptr);
+            _callback(BCOS_ERROR_PTR(-1, errorMessage), {});
 
             return;
         }
@@ -115,13 +118,13 @@ void RocksDBStorage::asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::st
     {
         // TODO: _callback(BCOS_ERROR_WITH_PREV_PTR(-1, "Get row failed!", e),
         // nullptr);
-        _callback(BCOS_ERROR_WITH_PREV_PTR(-1, "Get row failed!", e), nullptr);
+        _callback(BCOS_ERROR_WITH_PREV_PTR(-1, "Get row failed!", e), {});
     }
 }
 
-void RocksDBStorage::asyncGetRows(const TableInfo::Ptr& _tableInfo,
-    const gsl::span<std::string>& _keys,
-    std::function<void(Error::Ptr&&, std::vector<Entry::Ptr>&&)> _callback) noexcept
+void RocksDBStorage::asyncGetRows(const TableInfo::ConstPtr& _tableInfo,
+    const gsl::span<std::string const>& _keys,
+    std::function<void(Error::Ptr&&, std::vector<std::optional<Entry>>&&)> _callback) noexcept
 {
     try
     {
@@ -141,7 +144,7 @@ void RocksDBStorage::asyncGetRows(const TableInfo::Ptr& _tableInfo,
         m_db->MultiGet(ReadOptions(), m_db->DefaultColumnFamily(), slices.size(), slices.data(),
             values.data(), statusList.data());
 
-        std::vector<Entry::Ptr> entries(_keys.size());
+        std::vector<std::optional<Entry>> entries(_keys.size());
         tbb::parallel_for(tbb::blocked_range<size_t>(0, _keys.size()),
             [&](const tbb::blocked_range<size_t>& range) {
                 for (size_t i = range.begin(); i != range.end(); ++i)
@@ -168,7 +171,7 @@ void RocksDBStorage::asyncGetRows(const TableInfo::Ptr& _tableInfo,
                             STORAGE_LOG(WARNING) << "Multi get rows unknown error";
                         }
 
-                        entries[i] = nullptr;
+                        entries[i] = {};
                     }
                 }
             });
@@ -177,13 +180,13 @@ void RocksDBStorage::asyncGetRows(const TableInfo::Ptr& _tableInfo,
     }
     catch (const std::exception& e)
     {
-        _callback(std::make_shared<bcos::Error>(BCOS_ERROR_WITH_PREV(-1, "Get rows failed! ", e)),
-            std::vector<Entry::Ptr>());
+        _callback(BCOS_ERROR_WITH_PREV_PTR(-1, "Get rows failed! ", e),
+            std::vector<std::optional<Entry>>());
     }
 }
 
-void RocksDBStorage::asyncSetRow(const TableInfo::Ptr& tableInfo, const std::string& key,
-    const Entry::ConstPtr& entry, std::function<void(Error::Ptr&&, bool)> callback) noexcept
+void RocksDBStorage::asyncSetRow(const TableInfo::ConstPtr& tableInfo, const std::string& key,
+    Entry entry, std::function<void(Error::Ptr&&, bool)> callback) noexcept
 {
     try
     {
@@ -192,7 +195,7 @@ void RocksDBStorage::asyncSetRow(const TableInfo::Ptr& tableInfo, const std::str
 
         WriteOptions options;
         rocksdb::Status status;
-        if (entry->status() == Entry::DELETED)
+        if (entry.status() == Entry::DELETED)
         {
             status = m_db->Delete(options, dbKey);
         }
@@ -220,20 +223,20 @@ void RocksDBStorage::asyncSetRow(const TableInfo::Ptr& tableInfo, const std::str
     }
 }
 
-void RocksDBStorage::asyncPrepare(const PrepareParams&,
-    const TraverseStorageInterface::Ptr& storage,
+void RocksDBStorage::asyncPrepare(const TwoPCParams& params,
+    const TraverseStorageInterface::ConstPtr& storage,
     std::function<void(Error::Ptr&&)> callback) noexcept
 {
     try
     {
+        (void)params;
         rocksdb::WriteBatch writeBatch;
 
         tbb::spin_mutex writeMutex;
-        storage->parallelTraverse(true, [&](const TableInfo::Ptr& tableInfo, const std::string& key,
-                                            const Entry::ConstPtr& entry) {
+        storage->parallelTraverse(true, [&](auto&& tableInfo, auto&& key, auto&& entry) {
             auto dbKey = toDBKey(tableInfo, key);
 
-            if (entry->status() == Entry::DELETED)
+            if (entry.status() == Entry::DELETED)
             {
                 tbb::spin_mutex::scoped_lock lock(writeMutex);
                 writeBatch.Delete(dbKey);
@@ -259,18 +262,21 @@ void RocksDBStorage::asyncPrepare(const PrepareParams&,
 }
 
 void RocksDBStorage::asyncCommit(
-    protocol::BlockNumber, std::function<void(Error::Ptr&&)> callback) noexcept
+    const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept
 {
+    (void)params;
     callback(nullptr);
 }
 
 void RocksDBStorage::asyncRollback(
-    protocol::BlockNumber, std::function<void(Error::Ptr&&)> callback) noexcept
+    const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept
 {
+    (void)params;
     callback(nullptr);
 }
 
-std::string RocksDBStorage::toDBKey(TableInfo::Ptr tableInfo, const std::string_view& key)
+std::string RocksDBStorage::toDBKey(
+    const TableInfo::ConstPtr& tableInfo, const std::string_view& key)
 {
     std::string dbKey;
     if (tableInfo)
@@ -286,24 +292,24 @@ std::string RocksDBStorage::toDBKey(TableInfo::Ptr tableInfo, const std::string_
     }
 }
 
-std::string RocksDBStorage::encodeEntry(const Entry::ConstPtr& entry)
+std::string RocksDBStorage::encodeEntry(const Entry& entry)
 {
     std::string value;
     boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
     boost::archive::binary_oarchive archive(outputStream,
         boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
 
-    auto& data = entry->fields();
+    auto& data = entry.fields();
     archive << data;
     outputStream.flush();
 
     return value;
 }
 
-Entry::Ptr RocksDBStorage::decodeEntry(TableInfo::Ptr tableInfo,
+Entry RocksDBStorage::decodeEntry(const TableInfo::ConstPtr& tableInfo,
     bcos::protocol::BlockNumber blockNumber, const std::string_view& buffer)
 {
-    auto entry = std::make_shared<Entry>(tableInfo, blockNumber);
+    auto entry = Entry(tableInfo, blockNumber);
 
     boost::iostreams::stream<boost::iostreams::array_source> inputStream(
         buffer.data(), buffer.size());
@@ -313,7 +319,7 @@ Entry::Ptr RocksDBStorage::decodeEntry(TableInfo::Ptr tableInfo,
     std::vector<std::string> fields;
     archive >> fields;
 
-    entry->importFields(std::move(fields));
+    entry.importFields(std::move(fields));
 
     return entry;
 }

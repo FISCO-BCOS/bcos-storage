@@ -37,33 +37,35 @@ public:
 
     ~RocksDBStorage() {}
 
-    void asyncGetPrimaryKeys(const TableInfo::Ptr& _tableInfo, const Condition::Ptr& _condition,
+    void asyncGetPrimaryKeys(const TableInfo::ConstPtr& _tableInfo,
+        const std::optional<Condition const>& _condition,
         std::function<void(Error::Ptr&&, std::vector<std::string>&&)> _callback) noexcept override;
 
-    void asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::string& _key,
-        std::function<void(Error::Ptr&&, Entry::Ptr&&)> _callback) noexcept override;
+    void asyncGetRow(const TableInfo::ConstPtr& _tableInfo, const std::string& _key,
+        std::function<void(Error::Ptr&&, std::optional<Entry>&&)> _callback) noexcept override;
 
-    void asyncGetRows(const TableInfo::Ptr& _tableInfo, const gsl::span<std::string>& _keys,
-        std::function<void(Error::Ptr&&, std::vector<Entry::Ptr>&&)> _callback) noexcept override;
+    void asyncGetRows(const TableInfo::ConstPtr& _tableInfo,
+        const gsl::span<std::string const>& _keys,
+        std::function<void(Error::Ptr&&, std::vector<std::optional<Entry>>&&)> _callback) noexcept
+        override;
 
-    void asyncSetRow(const TableInfo::Ptr& tableInfo, const std::string& key,
-        const Entry::ConstPtr& entry,
+    void asyncSetRow(const TableInfo::ConstPtr& tableInfo, const std::string& key, Entry entry,
         std::function<void(Error::Ptr&&, bool)> callback) noexcept override;
 
-    void asyncPrepare(const PrepareParams& params, const TraverseStorageInterface::Ptr& storage,
+    void asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface::ConstPtr& storage,
         std::function<void(Error::Ptr&&)> callback) noexcept override;
 
-    void asyncCommit(protocol::BlockNumber blockNumber,
-        std::function<void(Error::Ptr&&)> callback) noexcept override;
+    void asyncCommit(
+        const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept override;
 
-    void asyncRollback(protocol::BlockNumber blockNumber,
-        std::function<void(Error::Ptr&&)> callback) noexcept override;
+    void asyncRollback(
+        const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept override;
 
 private:
-    std::string toDBKey(TableInfo::Ptr tableInfo, const std::string_view& key);
+    std::string toDBKey(const TableInfo::ConstPtr& tableInfo, const std::string_view& key);
 
-    std::string encodeEntry(const Entry::ConstPtr& entry);
-    Entry::Ptr decodeEntry(TableInfo::Ptr tableInfo, bcos::protocol::BlockNumber blockNumber,
+    std::string encodeEntry(const Entry& entry);
+    Entry decodeEntry(const TableInfo::ConstPtr& tableInfo, bcos::protocol::BlockNumber blockNumber,
         const std::string_view& buffer);
 
     std::unique_ptr<rocksdb::DB> m_db;
