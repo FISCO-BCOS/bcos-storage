@@ -1,0 +1,92 @@
+/*
+ *  Copyright (C) 2021 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @brief the header of TiKVStorage
+ * @file TiKVStorage.h
+ * @author: xingqiangbai
+ * @date: 2021-04-16
+ */
+
+#pragma once
+
+#include <bcos-framework/interfaces/storage/StorageInterface.h>
+#include <rocksdb/db.h>
+
+namespace pingcap
+{
+namespace kv
+{
+struct Cluster;
+struct BCOSTwoPhaseCommitter;
+struct Snapshot;
+}  // namespace kv
+}  // namespace pingcap
+
+namespace bcos::storage
+{
+const char* const TABLE_KEY_SPLIT = ":";
+class TiKVStorage : public TransactionalStorageInterface
+{
+public:
+    using Ptr = std::shared_ptr<TiKVStorage>;
+    explicit TiKVStorage(const std::shared_ptr<pingcap::kv::Cluster>& _cluster);
+
+    ~TiKVStorage() {}
+
+    void asyncGetPrimaryKeys(const std::string_view& _table,
+        const std::optional<Condition const>& _condition,
+        std::function<void(Error::UniquePtr&&, std::vector<std::string>&&)> _callback) noexcept
+        override;
+
+    void asyncGetRow(const std::string_view& table, const std::string_view& _key,
+        std::function<void(Error::UniquePtr&&, std::optional<Entry>&&)> _callback) noexcept
+        override;
+
+    void asyncGetRows(const std::string_view& table,
+        const std::variant<const gsl::span<std::string_view const>,
+            const gsl::span<std::string const>>& _keys,
+        std::function<void(Error::UniquePtr&&, std::vector<std::optional<Entry>>&&)>
+            _callback) noexcept override;
+
+    void asyncSetRow(const std::string_view& table, const std::string_view& key,
+        Entry entry, std::function<void(Error::UniquePtr&&)> callback) noexcept override;
+
+    void asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface::ConstPtr& storage,
+        std::function<void(Error::Ptr&&, uint64_t)> callback) noexcept override;
+
+    void asyncCommit(
+        const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept override;
+
+    void asyncRollback(
+        const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept override;
+
+private:
+    std::string toDBKey(const std::string_view& tableName, const std::string_view& key)
+    {
+        std::string dbKey;
+        dbKey.append(tableName).append(TABLE_KEY_SPLIT).append(key);
+        return dbKey;
+    }
+
+    TableInfo::ConstPtr getTableInfo(const std::string_view& tableName);
+    std::string encodeEntry(const Entry& entry);
+    std::optional<Entry> decodeEntry(TableInfo::ConstPtr tableInfo,
+        const std::string_view& buffer);
+
+    std::shared_ptr<pingcap::kv::Cluster> m_cluster;
+    std::shared_ptr<pingcap::kv::Snapshot> m_snapshot = nullptr;
+    std::shared_ptr<pingcap::kv::BCOSTwoPhaseCommitter> m_committer;
+};
+}  // namespace bcos::storage

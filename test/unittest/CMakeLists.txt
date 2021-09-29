@@ -29,7 +29,7 @@ find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
 
 target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework ${STORAGE_TARGET} bcos-framework::utilities
                         bcos-framework::protocol bcos-framework::protocol-pb bcos-framework::codec
-                        bcos-framework::table)
+                        bcos-framework::storage)
 
 # for code coverage
 if (COVERAGE)

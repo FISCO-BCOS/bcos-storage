@@ -15,7 +15,7 @@ find_package(Boost CONFIG QUIET REQUIRED serialization)
 find_package(Threads REQUIRED)
 
 # target_include_directories(${STORAGE_TARGET} PRIVATE ../include)
-target_link_libraries(${STORAGE_TARGET} PUBLIC tbb::tbb Boost::serialization RocksDB::rocksdb zstd::libzstd_static Threads::Threads bcos-framework::utilities)
+target_link_libraries(${STORAGE_TARGET} PUBLIC tbb::tbb Boost::serialization RocksDB::rocksdb zstd::libzstd_static Threads::Threads bcos-framework::utilities bcos::tikv_client)
 # target_compile_options(storage PRIVATE -Wno-error)
 
 install(
