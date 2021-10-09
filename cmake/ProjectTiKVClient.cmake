@@ -9,7 +9,7 @@ find_package(gRPC CONFIG REQUIRED)
 set(ENV{PATH} ${GRPC_ROOT}/bin:$ENV{PATH})
 FetchContent_Declare(tikv_client_project
   GIT_REPOSITORY https://${URL_BASE}/bxq2011hust/client-c.git
-  GIT_TAG        42a80f4b3391599892a4d191916644540ad8fd49
+  GIT_TAG        41913220562be1af13e160d5a72dc175ba62cfd9
   # SOURCE_DIR     ${CMAKE_SOURCE_DIR}/deps/src/
   PATCH_COMMAND  export PATH=${GRPC_ROOT}/bin:\$PATH COMMAND protoc --version COMMAND bash third_party/kvproto/scripts/generate_cpp.sh
   # LOG_BUILD true
