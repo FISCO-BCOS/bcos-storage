@@ -21,7 +21,7 @@
  * @author: ancelmo
  * @date: 2021-08-27
  */
-
+#if 0
 #pragma once
 
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
@@ -69,3 +69,4 @@ private:
     std::unique_ptr<rocksdb::DB> m_db;
 };
 }  // namespace bcos::storage
+#endif

@@ -18,6 +18,7 @@
  * @author: xingqiangbai
  * @date: 2021-04-16
  */
+#if 0
 #include "RocksDBStorage.h"
 #include "bcos-framework/libutilities/Error.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
@@ -317,3 +318,4 @@ Entry::Ptr RocksDBStorage::decodeEntry(TableInfo::Ptr tableInfo,
 
     return entry;
 }
+#endif
