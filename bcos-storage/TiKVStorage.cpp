@@ -19,9 +19,9 @@
  * @date: 2021-09-26
  */
 #include "TiKVStorage.h"
+#include "Common.h"
 #include "bcos-framework/interfaces/storage/Table.h"
 #include "bcos-framework/libutilities/Error.h"
-
 #include "interfaces/protocol/ProtocolTypeDef.h"
 #include "pingcap/kv/BCOS2PC.h"
 #include "pingcap/kv/Scanner.h"
@@ -29,13 +29,6 @@
 #include "pingcap/kv/Txn.h"
 #include <tbb/concurrent_vector.h>
 #include <tbb/spin_mutex.h>
-#include <boost/archive/basic_archive.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/archive/text_oarchive.hpp>
-#include <boost/iostreams/device/back_inserter.hpp>
-#include <boost/iostreams/stream.hpp>
-#include <boost/serialization/vector.hpp>
 #include <exception>
 
 using namespace bcos::storage;
@@ -43,15 +36,15 @@ using namespace pingcap::kv;
 using namespace std;
 
 TiKVStorage::TiKVStorage(const std::shared_ptr<pingcap::kv::Cluster>& _cluster)
-      : m_cluster(_cluster)
-    {
-        m_snapshot = std::make_shared<Snapshot>(m_cluster.get());
-    }
+  : m_cluster(_cluster)
+{
+    m_snapshot = std::make_shared<Snapshot>(m_cluster.get());
+}
 
 void TiKVStorage::asyncGetPrimaryKeys(const std::string_view& _table,
     const std::optional<Condition const>& _condition,
     std::function<void(Error::UniquePtr&&, std::vector<std::string>&&)> _callback) noexcept
-{  // this method is high price
+{
     std::vector<std::string> result;
 
     std::string keyPrefix;
@@ -59,7 +52,7 @@ void TiKVStorage::asyncGetPrimaryKeys(const std::string_view& _table,
 
     auto scanner = m_snapshot->Scan(keyPrefix, string());
 
-    // TODO: check performance and add limit of primary keys
+    // FIXME: check performance and add limit of primary keys
     for (; scanner.valid && scanner.key().rfind(keyPrefix, 0) == 0; scanner.next())
     {
         if (scanner.value().empty())
@@ -110,7 +103,7 @@ void TiKVStorage::asyncGetRows(const std::string_view& _table,
     std::function<void(Error::UniquePtr&&, std::vector<std::optional<Entry>>&&)> _callback) noexcept
 {
     try
-    {  // FIXME: add batch get of tikv client
+    {  // FIXME: add batch get of tikv client and use it
         std::visit(
             [&](auto const& keys) {
                 std::vector<std::optional<Entry>> entries(keys.size());
@@ -261,45 +254,4 @@ TableInfo::ConstPtr TiKVStorage::getTableInfo(const std::string_view& tableName)
         }
     });
     return prom.get_future().get();
-}
-
-
-std::string TiKVStorage::encodeEntry(const Entry& entry)
-{
-    std::string value;
-    boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
-    boost::archive::binary_oarchive archive(outputStream,
-        boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
-    // TODO: try to optimize the implement of serialization
-    auto fields = entry.fields();
-    vector<string> data;
-    data.reserve(fields.size());
-    for (auto& value : fields)
-    {
-        std::visit(
-            [&](auto const& v) { data.push_back(std::string((const char*)v.data(), v.size())); },
-            value);
-    }
-    archive << data;
-    outputStream.flush();
-
-    return value;
-}
-
-std::optional<Entry> TiKVStorage::decodeEntry(
-    TableInfo::ConstPtr tableInfo, const std::string_view& buffer)
-{
-    Entry entry(tableInfo);
-
-    boost::iostreams::stream<boost::iostreams::array_source> inputStream(
-        buffer.data(), buffer.size());
-    boost::archive::binary_iarchive archive(inputStream,
-        boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
-
-    std::vector<std::string> data;
-    archive >> data;
-
-    entry.importFields(std::move(data));
-
-    return std::optional<Entry>(entry);
 }

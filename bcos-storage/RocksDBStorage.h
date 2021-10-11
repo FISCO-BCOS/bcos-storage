@@ -21,11 +21,15 @@
  * @author: ancelmo
  * @date: 2021-08-27
  */
-#if 0
 #pragma once
 
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
 #include <rocksdb/db.h>
+
+namespace rocksdb
+{
+class WriteBatch;
+}
 
 namespace bcos::storage
 {
@@ -33,40 +37,42 @@ class RocksDBStorage : public TransactionalStorageInterface
 {
 public:
     using Ptr = std::shared_ptr<RocksDBStorage>;
-    explicit RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db) : m_db(std::move(db)) {}
+    explicit RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db);
 
     ~RocksDBStorage() {}
 
-    void asyncGetPrimaryKeys(const TableInfo::Ptr& _tableInfo, const Condition::Ptr& _condition,
-        std::function<void(Error::Ptr&&, std::vector<std::string>&&)> _callback) noexcept override;
+    void asyncGetPrimaryKeys(const std::string_view& _table,
+        const std::optional<Condition const>& _condition,
+        std::function<void(Error::UniquePtr&&, std::vector<std::string>&&)> _callback) noexcept
+        override;
 
-    void asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::string& _key,
-        std::function<void(Error::Ptr&&, Entry::Ptr&&)> _callback) noexcept override;
+    void asyncGetRow(const std::string_view& table, const std::string_view& _key,
+        std::function<void(Error::UniquePtr&&, std::optional<Entry>&&)> _callback) noexcept
+        override;
 
-    void asyncGetRows(const TableInfo::Ptr& _tableInfo, const gsl::span<std::string>& _keys,
-        std::function<void(Error::Ptr&&, std::vector<Entry::Ptr>&&)> _callback) noexcept override;
+    void asyncGetRows(const std::string_view& table,
+        const std::variant<const gsl::span<std::string_view const>,
+            const gsl::span<std::string const>>& _keys,
+        std::function<void(Error::UniquePtr&&, std::vector<std::optional<Entry>>&&)>
+            _callback) noexcept override;
 
-    void asyncSetRow(const TableInfo::Ptr& tableInfo, const std::string& key,
-        const Entry::ConstPtr& entry,
-        std::function<void(Error::Ptr&&, bool)> callback) noexcept override;
+    void asyncSetRow(const std::string_view& table, const std::string_view& key, Entry entry,
+        std::function<void(Error::UniquePtr&&)> callback) noexcept override;
 
-    void asyncPrepare(const PrepareParams& params, const TraverseStorageInterface::Ptr& storage,
-        std::function<void(Error::Ptr&&)> callback) noexcept override;
+    void asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface::ConstPtr& storage,
+        std::function<void(Error::Ptr&&, uint64_t)> callback) noexcept override;
 
-    void asyncCommit(protocol::BlockNumber blockNumber,
-        std::function<void(Error::Ptr&&)> callback) noexcept override;
+    void asyncCommit(
+        const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept override;
 
-    void asyncRollback(protocol::BlockNumber blockNumber,
-        std::function<void(Error::Ptr&&)> callback) noexcept override;
+    void asyncRollback(
+        const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept override;
 
 private:
-    std::string toDBKey(TableInfo::Ptr tableInfo, const std::string_view& key);
+    TableInfo::ConstPtr getTableInfo(const std::string_view& tableName);
 
-    std::string encodeEntry(const Entry::ConstPtr& entry);
-    Entry::Ptr decodeEntry(TableInfo::Ptr tableInfo, bcos::protocol::BlockNumber blockNumber,
-        const std::string_view& buffer);
-
+    std::shared_ptr<rocksdb::WriteBatch> m_writeBatch = nullptr;
+    tbb::spin_mutex m_writeBatchMutex;
     std::unique_ptr<rocksdb::DB> m_db;
 };
 }  // namespace bcos::storage
-#endif
