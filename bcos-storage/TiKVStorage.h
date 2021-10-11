@@ -22,7 +22,6 @@
 #pragma once
 
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
-#include <rocksdb/db.h>
 
 namespace pingcap
 {
@@ -36,7 +35,6 @@ struct Snapshot;
 
 namespace bcos::storage
 {
-const char* const TABLE_KEY_SPLIT = ":";
 class TiKVStorage : public TransactionalStorageInterface
 {
 public:
@@ -73,17 +71,8 @@ public:
         const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept override;
 
 private:
-    std::string toDBKey(const std::string_view& tableName, const std::string_view& key)
-    {
-        std::string dbKey;
-        dbKey.append(tableName).append(TABLE_KEY_SPLIT).append(key);
-        return dbKey;
-    }
 
     TableInfo::ConstPtr getTableInfo(const std::string_view& tableName);
-    std::string encodeEntry(const Entry& entry);
-    std::optional<Entry> decodeEntry(TableInfo::ConstPtr tableInfo,
-        const std::string_view& buffer);
 
     std::shared_ptr<pingcap::kv::Cluster> m_cluster;
     std::shared_ptr<pingcap::kv::Snapshot> m_snapshot = nullptr;

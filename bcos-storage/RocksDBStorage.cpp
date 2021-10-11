@@ -18,51 +18,42 @@
  * @author: xingqiangbai
  * @date: 2021-04-16
  */
-#if 0
 #include "RocksDBStorage.h"
+#include "Common.h"
 #include "bcos-framework/libutilities/Error.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/interfaces/storage/Table.h"
 #include <rocksdb/cleanable.h>
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/spin_mutex.h>
-#include <boost/archive/basic_archive.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/archive/text_oarchive.hpp>
-#include <boost/iostreams/device/back_inserter.hpp>
-#include <boost/iostreams/stream.hpp>
-#include <boost/serialization/vector.hpp>
+#include <future>
 #include <exception>
 
 using namespace bcos::storage;
 using namespace rocksdb;
+using namespace std;
 
-const char* const TABLE_KEY_SPLIT = ":";
+RocksDBStorage::RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db) : m_db(std::move(db))
+{
+    m_writeBatch = std::make_shared<WriteBatch>();
+}
 
-void RocksDBStorage::asyncGetPrimaryKeys(const TableInfo::Ptr& _tableInfo,
-    const Condition::Ptr& _condition,
-    std::function<void(Error::Ptr&&, std::vector<std::string>&&)> _callback) noexcept
+void RocksDBStorage::asyncGetPrimaryKeys(const std::string_view& _table,
+    const std::optional<Condition const>& _condition,
+    std::function<void(Error::UniquePtr&&, std::vector<std::string>&&)> _callback) noexcept
 {
     std::vector<std::string> result;
 
     std::string keyPrefix;
-    if (_tableInfo)
-    {
-        keyPrefix = _tableInfo->name + TABLE_KEY_SPLIT;
-    }
-    else
-    {
-        keyPrefix = TABLE_KEY_SPLIT;
-    }
+    keyPrefix = string(_table) + TABLE_KEY_SPLIT;
 
     ReadOptions read_options;
     read_options.total_order_seek = true;
     auto iter = m_db->NewIterator(read_options);
 
-    // TODO: prefix in get primarykeys
-    // TODO: check performance
+    // FIXME: check performance and add limit of primary keys
     for (iter->Seek(keyPrefix); iter->Valid() && iter->key().starts_with(keyPrefix); iter->Next())
     {
         size_t start = keyPrefix.size();
@@ -78,13 +69,13 @@ void RocksDBStorage::asyncGetPrimaryKeys(const TableInfo::Ptr& _tableInfo,
     _callback(nullptr, std::move(result));
 }
 
-void RocksDBStorage::asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::string& _key,
-    std::function<void(Error::Ptr&&, Entry::Ptr&&)> _callback) noexcept
+void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::string_view& _key,
+    std::function<void(Error::UniquePtr&&, std::optional<Entry>&&)> _callback) noexcept
 {
     try
     {
         PinnableSlice value;
-        auto dbKey = toDBKey(_tableInfo, _key);
+        auto dbKey = toDBKey(_table, _key);
 
         auto status = m_db->Get(
             ReadOptions(), m_db->DefaultColumnFamily(), Slice(dbKey.data(), dbKey.size()), &value);
@@ -93,7 +84,7 @@ void RocksDBStorage::asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::st
         {
             if (status.IsNotFound())
             {
-                _callback(nullptr, nullptr);
+                _callback(nullptr, std::optional<Entry>());
                 return;
             }
 
@@ -103,102 +94,113 @@ void RocksDBStorage::asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::st
             {
                 errorMessage.append(" ").append(status.getState());
             }
-            _callback(BCOS_ERROR_PTR(-1, errorMessage), nullptr);
+            _callback(BCOS_ERROR_UNIQUE_PTR(-1, errorMessage), std::optional<Entry>());
 
             return;
         }
-
-        auto entry = decodeEntry(_tableInfo, 0, value.ToStringView());
-
-        _callback(nullptr, std::move(entry));
+        TableInfo::ConstPtr tableInfo = getTableInfo(_table);
+        if (!tableInfo)
+        {
+            _callback(BCOS_ERROR_UNIQUE_PTR(-1, "asyncGetRow failed because can't get TableInfo!"),
+                std::optional<Entry>());
+        }
+        _callback(nullptr, decodeEntry(tableInfo, value.ToStringView()));
     }
     catch (const std::exception& e)
     {
-        // TODO: _callback(BCOS_ERROR_WITH_PREV_PTR(-1, "Get row failed!", e),
-        // nullptr);
-        _callback(BCOS_ERROR_WITH_PREV_PTR(-1, "Get row failed!", e), nullptr);
+        _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get row failed!", e), std::optional<Entry>());
     }
 }
 
-void RocksDBStorage::asyncGetRows(const TableInfo::Ptr& _tableInfo,
-    const gsl::span<std::string>& _keys,
-    std::function<void(Error::Ptr&&, std::vector<Entry::Ptr>&&)> _callback) noexcept
+void RocksDBStorage::asyncGetRows(const std::string_view& _table,
+    const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
+        _keys,
+    std::function<void(Error::UniquePtr&&, std::vector<std::optional<Entry>>&&)> _callback) noexcept
 {
     try
     {
-        std::vector<std::string> dbKeys(_keys.size());
-        std::vector<Slice> slices(_keys.size());
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, _keys.size()),
-            [&](const tbb::blocked_range<size_t>& range) {
-                for (size_t i = range.begin(); i != range.end(); ++i)
+        std::visit(
+            [&](auto const& keys) {
+                std::vector<std::string> dbKeys(keys.size());
+                std::vector<Slice> slices(keys.size());
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
+                    [&](const tbb::blocked_range<size_t>& range) {
+                        for (size_t i = range.begin(); i != range.end(); ++i)
+                        {
+                            dbKeys[i] = toDBKey(_table, keys[i]);
+                            slices[i] = Slice(dbKeys[i].data(), dbKeys[i].size());
+                        }
+                    });
+
+                std::vector<PinnableSlice> values(keys.size());
+                std::vector<Status> statusList(keys.size());
+                m_db->MultiGet(ReadOptions(), m_db->DefaultColumnFamily(), slices.size(),
+                    slices.data(), values.data(), statusList.data());
+
+                std::vector<std::optional<Entry>> entries(keys.size());
+                TableInfo::ConstPtr tableInfo = getTableInfo(_table);
+                if (!tableInfo)
                 {
-                    dbKeys[i] = toDBKey(_tableInfo, _keys[i]);
-                    slices[i] = Slice(dbKeys[i].data(), dbKeys[i].size());
+                    _callback(BCOS_ERROR_UNIQUE_PTR(
+                                  -1, "asyncGetRows failed because can't get TableInfo!"),
+                        std::vector<std::optional<Entry>>());
                 }
-            });
-
-        std::vector<PinnableSlice> values(_keys.size());
-        std::vector<Status> statusList(_keys.size());
-        m_db->MultiGet(ReadOptions(), m_db->DefaultColumnFamily(), slices.size(), slices.data(),
-            values.data(), statusList.data());
-
-        std::vector<Entry::Ptr> entries(_keys.size());
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, _keys.size()),
-            [&](const tbb::blocked_range<size_t>& range) {
-                for (size_t i = range.begin(); i != range.end(); ++i)
-                {
-                    auto& status = statusList[i];
-                    auto& value = values[i];
-
-                    if (status.ok())
-                    {
-                        entries[i] = decodeEntry(_tableInfo, 0, value.ToStringView());
-                    }
-                    else
-                    {
-                        if (status.IsNotFound())
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
+                    [&](const tbb::blocked_range<size_t>& range) {
+                        for (size_t i = range.begin(); i != range.end(); ++i)
                         {
-                            STORAGE_LOG(WARNING) << "Multi get rows, not found key: " << _keys[i];
-                        }
-                        else if (status.getState())
-                        {
-                            STORAGE_LOG(WARNING) << "Multi get rows error: " << status.getState();
-                        }
-                        else
-                        {
-                            STORAGE_LOG(WARNING) << "Multi get rows unknown error";
-                        }
+                            auto& status = statusList[i];
+                            auto& value = values[i];
 
-                        entries[i] = nullptr;
-                    }
-                }
-            });
-
-        _callback(nullptr, std::move(entries));
+                            if (status.ok())
+                            {
+                                entries[i] = decodeEntry(tableInfo, value.ToStringView());
+                            }
+                            else
+                            {
+                                if (status.IsNotFound())
+                                {
+                                    STORAGE_LOG(WARNING)
+                                        << "Multi get rows, not found key: " << keys[i];
+                                }
+                                else if (status.getState())
+                                {
+                                    STORAGE_LOG(WARNING)
+                                        << "Multi get rows error: " << status.getState();
+                                }
+                                else
+                                {
+                                    STORAGE_LOG(WARNING) << "Multi get rows unknown error";
+                                }
+                            }
+                        }
+                    });
+                _callback(nullptr, std::move(entries));
+            },
+            _keys);
     }
     catch (const std::exception& e)
     {
-        _callback(std::make_shared<bcos::Error>(BCOS_ERROR_WITH_PREV(-1, "Get rows failed! ", e)),
-            std::vector<Entry::Ptr>());
+        _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get rows failed! ", e),
+            std::vector<std::optional<Entry>>());
     }
 }
 
-void RocksDBStorage::asyncSetRow(const TableInfo::Ptr& tableInfo, const std::string& key,
-    const Entry::ConstPtr& entry, std::function<void(Error::Ptr&&, bool)> callback) noexcept
+void RocksDBStorage::asyncSetRow(const std::string_view& _table, const std::string_view& _key,
+    Entry _entry, std::function<void(Error::UniquePtr&&)> _callback) noexcept
 {
     try
     {
-        auto dbKey = toDBKey(tableInfo, key);
-        std::string value = encodeEntry(entry);
-
+        auto dbKey = toDBKey(_table, _key);
         WriteOptions options;
         rocksdb::Status status;
-        if (entry->status() == Entry::DELETED)
+        if (_entry.status() == Entry::DELETED)
         {
             status = m_db->Delete(options, dbKey);
         }
         else
         {
+            std::string value = encodeEntry(_entry);
             status = m_db->Put(options, dbKey, value);
         }
 
@@ -209,113 +211,93 @@ void RocksDBStorage::asyncSetRow(const TableInfo::Ptr& tableInfo, const std::str
             {
                 errorMessage.append(" ").append(status.getState());
             }
-            callback(BCOS_ERROR_PTR(-1, errorMessage), false);
+            _callback(BCOS_ERROR_UNIQUE_PTR(-1, errorMessage));
             return;
         }
 
-        callback(nullptr, true);
+        _callback(nullptr);
     }
     catch (const std::exception& e)
     {
-        callback(BCOS_ERROR_WITH_PREV_PTR(-1, "Set row failed! ", e), false);
+        _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Set row failed! ", e));
     }
 }
 
-void RocksDBStorage::asyncPrepare(const PrepareParams&,
-    const TraverseStorageInterface::Ptr& storage,
-    std::function<void(Error::Ptr&&)> callback) noexcept
+void RocksDBStorage::asyncPrepare(const TwoPCParams& param,
+    const TraverseStorageInterface::ConstPtr& storage,
+    std::function<void(Error::Ptr&&, uint64_t startTS)> callback) noexcept
 {
+    std::ignore = param;
     try
     {
-        rocksdb::WriteBatch writeBatch;
-
-        tbb::spin_mutex writeMutex;
-        storage->parallelTraverse(true, [&](const TableInfo::Ptr& tableInfo, const std::string& key,
-                                            const Entry::ConstPtr& entry) {
-            auto dbKey = toDBKey(tableInfo, key);
-
-            if (entry->status() == Entry::DELETED)
+        {
+            tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
+            if (!m_writeBatch)
             {
-                tbb::spin_mutex::scoped_lock lock(writeMutex);
-                writeBatch.Delete(dbKey);
+                m_writeBatch = std::make_shared<WriteBatch>();
             }
-            else
-            {
-                std::string value = encodeEntry(entry);
+        }
+        storage->parallelTraverse(true,
+            [&](const std::string_view& table, const std::string_view& key, Entry const& entry) {
+                auto dbKey = toDBKey(table, key);
 
-                tbb::spin_mutex::scoped_lock lock(writeMutex);
-                auto status = writeBatch.Put(dbKey, value);
-            }
-            return true;
-        });
-
-        m_db->Write(WriteOptions(), &writeBatch);
-
-        callback(nullptr);
+                if (entry.status() == Entry::DELETED)
+                {
+                    tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
+                    m_writeBatch->Delete(dbKey);
+                }
+                else
+                {
+                    std::string value = encodeEntry(entry);
+                    tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
+                    auto status = m_writeBatch->Put(dbKey, value);
+                }
+                return true;
+            });
+        callback(nullptr, 0);
     }
     catch (const std::exception& e)
     {
-        callback(BCOS_ERROR_WITH_PREV_PTR(-1, "Prepare failed! ", e));
+        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Prepare failed! ", e), 0);
     }
 }
 
 void RocksDBStorage::asyncCommit(
-    protocol::BlockNumber, std::function<void(Error::Ptr&&)> callback) noexcept
+    const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept
 {
+    std::ignore = params;
+    {
+        tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
+        if (m_writeBatch)
+        {
+            m_db->Write(WriteOptions(), m_writeBatch.get());
+            m_writeBatch = nullptr;
+        }
+    }
     callback(nullptr);
 }
 
 void RocksDBStorage::asyncRollback(
-    protocol::BlockNumber, std::function<void(Error::Ptr&&)> callback) noexcept
+    const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept
 {
+    std::ignore = params;
     callback(nullptr);
 }
 
-std::string RocksDBStorage::toDBKey(TableInfo::Ptr tableInfo, const std::string_view& key)
+TableInfo::ConstPtr RocksDBStorage::getTableInfo(const std::string_view& tableName)
 {
-    std::string dbKey;
-    if (tableInfo)
-    {
-        std::string dbKey;
-        dbKey.append(tableInfo->name).append(TABLE_KEY_SPLIT).append(key);
-        return dbKey;
-    }
-    else
-    {
-        dbKey.append(TABLE_KEY_SPLIT).append(key);
-        return dbKey;
-    }
+    std::promise<TableInfo::ConstPtr> prom;
+    asyncOpenTable(tableName, [&prom](Error::UniquePtr&& error, std::optional<Table>&& table) {
+        if (error || !table)
+        {
+            STORAGE_LOG(WARNING) << "asyncGetRow get TableInfo failed"
+                                 << LOG_KV("message", error->errorMessage());
+            prom.set_value(nullptr);
+        }
+        else
+        {
+            prom.set_value(table->tableInfo());
+        }
+    });
+    return prom.get_future().get();
 }
-
-std::string RocksDBStorage::encodeEntry(const Entry::ConstPtr& entry)
-{
-    std::string value;
-    boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
-    boost::archive::binary_oarchive archive(outputStream,
-        boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
-
-    auto& data = entry->fields();
-    archive << data;
-    outputStream.flush();
-
-    return value;
-}
-
-Entry::Ptr RocksDBStorage::decodeEntry(TableInfo::Ptr tableInfo,
-    bcos::protocol::BlockNumber blockNumber, const std::string_view& buffer)
-{
-    auto entry = std::make_shared<Entry>(tableInfo, blockNumber);
-
-    boost::iostreams::stream<boost::iostreams::array_source> inputStream(
-        buffer.data(), buffer.size());
-    boost::archive::binary_iarchive archive(inputStream,
-        boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
-
-    std::vector<std::string> fields;
-    archive >> fields;
-
-    entry->importFields(std::move(fields));
-
-    return entry;
-}
-#endif
