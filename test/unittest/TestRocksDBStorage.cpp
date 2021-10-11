@@ -13,10 +13,17 @@
 #include <boost/serialization/vector.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
-
-#if 0
+#include <future>
+#include <optional>
 
 using namespace bcos::storage;
+using namespace std;
+
+// ostream& operator<<(ostream& os, const std::unique_ptr<bcos::Error>& error)
+// {
+//     os << error->what();
+//     return os;
+// }
 
 namespace bcos::test
 {
@@ -37,36 +44,50 @@ struct TestRocksDBStorageFixture
         BOOST_CHECK_EQUAL(s.ok(), true);
 
         rocksDBStorage = std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db));
-    }
-
-    void prepareNonTableData()
-    {
-        for (size_t i = 0; i < 1000; ++i)
+        rocksDBStorage->asyncOpenTable(testTableName, [&](auto&& error, auto&& table) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
+            if (table)
+            {
+                testTableInfo = table->tableInfo();
+            }
+        });
+        if (!testTableInfo)
         {
-            std::string key = "key" + boost::lexical_cast<std::string>(i);
-            auto entry = std::make_shared<Entry>();
-            entry->importFields({"value_" + boost::lexical_cast<std::string>(i), "value1", "value2",
-                "value3", "value4", "value5"});
-
-            rocksDBStorage->asyncSetRow(nullptr, key, entry, [](Error::Ptr&& error, bool success) {
-                BOOST_CHECK_EQUAL(error, nullptr);
-                BOOST_CHECK_EQUAL(success, true);
-            });
+            std::promise<std::optional<Table>> prom;
+            rocksDBStorage->asyncCreateTable(testTableName, "v1,v2,v3,v4,v5,v6",
+                [&prom](Error::UniquePtr&& error, std::optional<Table>&& table) {
+                    BOOST_CHECK_EQUAL(error.get(), nullptr);
+                    BOOST_CHECK_EQUAL(table.has_value(), true);
+                    prom.set_value(table);
+                });
+            auto table = prom.get_future().get();
+            testTableInfo = table->tableInfo();
         }
     }
 
-    void cleanupNonTableData()
+    void prepareTestTableData()
     {
         for (size_t i = 0; i < 1000; ++i)
         {
             std::string key = "key" + boost::lexical_cast<std::string>(i);
-            auto entry = std::make_shared<Entry>();
-            entry->setStatus(Entry::DELETED);
+            Entry entry(testTableInfo);
+            entry.importFields({"value_" + boost::lexical_cast<std::string>(i), "value1", "value2",
+                "value3", "value4", "value5"});
+            rocksDBStorage->asyncSetRow(testTableName, key, entry,
+                [](Error::UniquePtr&& error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
+        }
+    }
 
-            rocksDBStorage->asyncSetRow(nullptr, key, entry, [](Error::Ptr&& error, bool success) {
-                BOOST_CHECK_EQUAL(error, nullptr);
-                BOOST_CHECK_EQUAL(success, true);
-            });
+    void cleanupTestTableData()
+    {
+        for (size_t i = 0; i < 1000; ++i)
+        {
+            std::string key = "key" + boost::lexical_cast<std::string>(i);
+            Entry entry(testTableInfo);
+            entry.setStatus(Entry::DELETED);
+
+            rocksDBStorage->asyncSetRow(testTableName, key, entry,
+                [](Error::UniquePtr&& error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
         }
     }
 
@@ -80,12 +101,15 @@ struct TestRocksDBStorageFixture
 
     std::string path = "./unittestdb";
     RocksDBStorage::Ptr rocksDBStorage;
+    std::string testTableName = "TestTable";
+    TableInfo::ConstPtr testTableInfo = nullptr;
 };
+
 BOOST_FIXTURE_TEST_SUITE(TestRocksDBStorage, TestRocksDBStorageFixture)
 
 BOOST_AUTO_TEST_CASE(asyncGetRow)
 {
-    prepareNonTableData();
+    prepareTestTableData();
 
     tbb::concurrent_vector<std::function<void()>> checks;
     tbb::parallel_for(
@@ -93,24 +117,30 @@ BOOST_AUTO_TEST_CASE(asyncGetRow)
             for (size_t i = range.begin(); i != range.end(); ++i)
             {
                 std::string key = "key" + boost::lexical_cast<std::string>(i);
-                rocksDBStorage->asyncGetRow(
-                    nullptr, key, [&](Error::Ptr&& error, Entry::Ptr&& entry) {
-                        checks.push_back([i, error, entry]() {
-                            BOOST_CHECK_EQUAL(error, nullptr);
+                rocksDBStorage->asyncGetRow(testTableName, key,
+                    [&](Error::UniquePtr&& error, std::optional<Entry>&& entry) {
+                        BOOST_CHECK_EQUAL(error.get(), nullptr);
+                        checks.push_back([i, entry]() {
                             if (i < 1000)
                             {
-                                BOOST_CHECK_NE(entry, nullptr);
-
+                                BOOST_CHECK_NE(entry.has_value(), false);
                                 auto& data = entry->fields();
                                 auto fields = std::vector<std::string>(
                                     {"value_" + boost::lexical_cast<std::string>(i), "value1",
                                         "value2", "value3", "value4", "value5"});
-                                BOOST_CHECK_EQUAL_COLLECTIONS(
-                                    data.begin(), data.end(), fields.begin(), fields.end());
+                                for (size_t i = 0; i < fields.size(); ++i)
+                                {
+                                    std::visit(
+                                        [&](auto const& v) {
+                                            BOOST_CHECK_EQUAL(
+                                                string((char*)v.data(), v.size()), fields[i]);
+                                        },
+                                        data[i]);
+                                }
                             }
                             else
                             {
-                                BOOST_CHECK_EQUAL(entry, nullptr);
+                                BOOST_CHECK_EQUAL(entry.has_value(), false);
                             }
                         });
                     });
@@ -122,15 +152,15 @@ BOOST_AUTO_TEST_CASE(asyncGetRow)
         it();
     }
 
-    cleanupNonTableData();
+    cleanupTestTableData();
 }
 
 BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
 {
-    prepareNonTableData();
-    rocksDBStorage->asyncGetPrimaryKeys(
-        nullptr, nullptr, [&](Error::Ptr&& error, std::vector<std::string>&& keys) {
-            BOOST_CHECK_EQUAL(error, nullptr);
+    prepareTestTableData();
+    rocksDBStorage->asyncGetPrimaryKeys(testTableName, std::optional<Condition const>(),
+        [&](Error::UniquePtr&& error, std::vector<std::string>&& keys) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(keys.size(), 1000);
 
             std::vector<std::string> sortedKeys;
@@ -146,25 +176,23 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
                 sortedKeys.begin(), sortedKeys.end(), keys.begin(), keys.end());
         });
 
-    auto tableInfo = std::make_shared<TableInfo>("new_table", "key", "value");
+    auto tableInfo = std::make_shared<TableInfo>("new_table", vector<string>{"value"});
 
     for (size_t i = 1000; i < 2000; ++i)
     {
         std::string key = "newkey" + boost::lexical_cast<std::string>(i);
-        auto entry = std::make_shared<Entry>(tableInfo, 0);
-        entry->importFields({"value12345"});
+        auto entry = Entry(tableInfo);
+        entry.importFields({"value12345"});
 
-        rocksDBStorage->asyncSetRow(tableInfo, key, entry, [&](Error::Ptr&& error, bool success) {
-            BOOST_CHECK_EQUAL(error, nullptr);
-            BOOST_CHECK_EQUAL(success, true);
-        });
+        rocksDBStorage->asyncSetRow(tableInfo->name(), key, entry,
+            [&](Error::UniquePtr&& error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
     }
 
     // query old data
-    auto condition = std::make_shared<Condition>();
-    rocksDBStorage->asyncGetPrimaryKeys(
-        tableInfo, condition, [](Error::Ptr&& error, std::vector<std::string>&& keys) {
-            BOOST_CHECK_EQUAL(error, nullptr);
+    auto condition = std::optional<Condition const>();
+    rocksDBStorage->asyncGetPrimaryKeys(tableInfo->name(), condition,
+        [](Error::UniquePtr&& error, std::vector<std::string>&& keys) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(keys.size(), 1000);
 
             std::vector<std::string> sortedKeys;
@@ -181,8 +209,8 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
 
     // re-query non table data
     rocksDBStorage->asyncGetPrimaryKeys(
-        nullptr, nullptr, [&](Error::Ptr&& error, std::vector<std::string>&& keys) {
-            BOOST_CHECK_EQUAL(error, nullptr);
+        testTableName, condition, [&](Error::UniquePtr&& error, std::vector<std::string>&& keys) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(keys.size(), 1000);
 
             std::vector<std::string> sortedKeys;
@@ -198,44 +226,45 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
                 sortedKeys.begin(), sortedKeys.end(), keys.begin(), keys.end());
         });
 
-    rocksDBStorage->asyncGetRow(tableInfo, "newkey" + boost::lexical_cast<std::string>(1050),
-        [&](Error::Ptr&& error, Entry::Ptr&& entry) {
-            BOOST_CHECK_EQUAL(error, nullptr);
-            BOOST_CHECK_NE(entry, nullptr);
+    rocksDBStorage->asyncGetRow(tableInfo->name(),
+        "newkey" + boost::lexical_cast<std::string>(1050),
+        [&](Error::UniquePtr&& error, std::optional<Entry>&& entry) {
+            BOOST_CHECK_NE(error.get(), nullptr);
+            BOOST_CHECK_EQUAL(entry.has_value(), false);
         });
 
     // clean new data
     for (size_t i = 0; i < 1000; ++i)
     {
         std::string key = "newkey" + boost::lexical_cast<std::string>(i + 1000);
-        auto entry = std::make_shared<Entry>();
-        entry->setStatus(Entry::DELETED);
+        auto entry = Entry();
+        entry.setStatus(Entry::DELETED);
 
-        rocksDBStorage->asyncSetRow(tableInfo, key, entry, [](Error::Ptr&& error, bool success) {
-            BOOST_CHECK_EQUAL(error, nullptr);
-            BOOST_CHECK_EQUAL(success, true);
-        });
+        rocksDBStorage->asyncSetRow(tableInfo->name(), key, entry,
+            [](Error::UniquePtr&& error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
     }
 
-    rocksDBStorage->asyncGetRow(tableInfo, "newkey" + boost::lexical_cast<std::string>(1050),
-        [&](Error::Ptr&& error, Entry::Ptr&& entry) {
-            BOOST_CHECK_EQUAL(error, nullptr);
-            BOOST_CHECK_EQUAL(entry, nullptr);
+    rocksDBStorage->asyncGetRow(tableInfo->name(),
+        "newkey" + boost::lexical_cast<std::string>(1050),
+        [&](Error::UniquePtr&& error, std::optional<Entry>&& entry) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
+            BOOST_CHECK_EQUAL(entry.has_value(), false);
         });
 
     // check if the data is deleted
-    rocksDBStorage->asyncGetPrimaryKeys(
-        tableInfo, nullptr, [](Error::Ptr&& error, std::vector<std::string>&& keys) {
-            BOOST_CHECK_EQUAL(error, nullptr);
+    rocksDBStorage->asyncGetPrimaryKeys(tableInfo->name(),
+        std::optional<storage::Condition const>(),
+        [](Error::UniquePtr&& error, std::vector<std::string>&& keys) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(keys.size(), 0);
         });
 
-    cleanupNonTableData();
+    cleanupTestTableData();
 }
 
 BOOST_AUTO_TEST_CASE(asyncGetRows)
 {
-    prepareNonTableData();
+    prepareTestTableData();
 
     std::vector<std::string> keys;
     for (size_t i = 0; i < 1050; ++i)
@@ -243,9 +272,9 @@ BOOST_AUTO_TEST_CASE(asyncGetRows)
         std::string key = "key" + boost::lexical_cast<std::string>(i);
         keys.push_back(key);
     }
-    rocksDBStorage->asyncGetRows(
-        nullptr, keys, [&](Error::Ptr&& error, std::vector<Entry::Ptr>&& entries) {
-            BOOST_CHECK_EQUAL(error, nullptr);
+    rocksDBStorage->asyncGetRows(testTableName, keys,
+        [&](Error::UniquePtr&& error, std::vector<std::optional<Entry>>&& entries) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(entries.size(), 1050);
 
             for (size_t i = 0; i < 1050; ++i)
@@ -253,22 +282,30 @@ BOOST_AUTO_TEST_CASE(asyncGetRows)
                 auto& entry = entries[i];
                 if (i < 1000)
                 {
-                    BOOST_CHECK_NE(entry, nullptr);
+                    BOOST_CHECK_NE(entry.has_value(), false);
                     auto& data = entry->fields();
                     auto fields =
                         std::vector<std::string>({"value_" + boost::lexical_cast<std::string>(i),
                             "value1", "value2", "value3", "value4", "value5"});
-                    BOOST_CHECK_EQUAL_COLLECTIONS(
-                        data.begin(), data.end(), fields.begin(), fields.end());
+                    for (size_t i = 0; i < fields.size(); ++i)
+                    {
+                        std::visit(
+                            [&](auto const& v) {
+                                BOOST_CHECK_EQUAL(string((char*)v.data(), v.size()), fields[i]);
+                            },
+                            data[i]);
+                    }
+                    // BOOST_CHECK_EQUAL_COLLECTIONS(
+                    //     data.begin(), data.end(), fields.begin(), fields.end());
                 }
                 else
                 {
-                    BOOST_CHECK_EQUAL(entry, nullptr);
+                    BOOST_CHECK_EQUAL(entry.has_value(), false);
                 }
             }
         });
 
-    cleanupNonTableData();
+    cleanupTestTableData();
 }
 
 class Header256Hash : public bcos::crypto::Hash
@@ -287,19 +324,19 @@ public:
 
 BOOST_AUTO_TEST_CASE(asyncPrepare)
 {
-    prepareNonTableData();
+    prepareTestTableData();
 
     auto hashImpl = std::make_shared<Header256Hash>();
-    auto storage = std::make_shared<bcos::storage::TableStorage>(nullptr, hashImpl, 0);
-    BOOST_CHECK_EQUAL(storage->createTable("table1", "key", "value1,value2,value3"), true);
+    auto storage = std::make_shared<bcos::storage::StateStorage>(rocksDBStorage);
+    BOOST_CHECK_EQUAL(storage->createTable("table1", "value1,value2,value3").has_value(), true);
     BOOST_CHECK_EQUAL(
-        storage->createTable("table2", "key", "value1,value2,value3,value4,value5"), true);
+        storage->createTable("table2", "value1,value2,value3,value4,value5").has_value(), true);
 
     auto table1 = storage->openTable("table1");
     auto table2 = storage->openTable("table2");
 
-    BOOST_CHECK_NE(table1, nullptr);
-    BOOST_CHECK_NE(table2, nullptr);
+    BOOST_CHECK_NE(table1.has_value(), false);
+    BOOST_CHECK_NE(table2.has_value(), false);
 
     std::vector<std::string> table1Keys;
     std::vector<std::string> table2Keys;
@@ -308,32 +345,39 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
     {
         auto entry = table1->newEntry();
         auto key1 = "key" + boost::lexical_cast<std::string>(i);
-        entry->setField("value1", "hello world!" + boost::lexical_cast<std::string>(i));
+        entry.setField("value1", "hello world!" + boost::lexical_cast<std::string>(i));
         table1->setRow(key1, entry);
         table1Keys.push_back(key1);
 
         auto entry2 = table2->newEntry();
         auto key2 = "key" + boost::lexical_cast<std::string>(i);
-        entry2->setField("value3", "hello world!" + boost::lexical_cast<std::string>(i));
+        entry2.setField("value3", "hello world!" + boost::lexical_cast<std::string>(i));
         table2->setRow(key2, entry2);
         table2Keys.push_back(key2);
     }
 
-    rocksDBStorage->asyncPrepare(bcos::storage::TransactionalStorageInterface::PrepareParams(),
-        storage, [&](Error::Ptr&& error) { BOOST_CHECK_EQUAL(error, nullptr); });
+    rocksDBStorage->asyncPrepare(bcos::storage::TransactionalStorageInterface::TwoPCParams(),
+        storage, [&](Error::Ptr&& error, uint64_t ts) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
+            BOOST_CHECK_EQUAL(ts, 0);
+        });
+    // TODO: asyncPrepare can't be query
+    rocksDBStorage->asyncCommit(bcos::storage::TransactionalStorageInterface::TwoPCParams(),
+        [&](Error::Ptr&& error) { BOOST_CHECK_EQUAL(error, nullptr); });
 
-    rocksDBStorage->asyncGetPrimaryKeys(
-        table1->tableInfo(), nullptr, [&](Error::Ptr&& error, std::vector<std::string>&& keys) {
-            BOOST_CHECK_EQUAL(error, nullptr);
+    rocksDBStorage->asyncGetPrimaryKeys(table1->tableInfo()->name(),
+        std::optional<storage::Condition const>(),
+        [&](Error::UniquePtr&& error, std::vector<std::string>&& keys) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(keys.size(), 10);
 
             std::sort(table1Keys.begin(), table1Keys.end());
             BOOST_CHECK_EQUAL_COLLECTIONS(
                 table1Keys.begin(), table1Keys.end(), keys.begin(), keys.end());
 
-            rocksDBStorage->asyncGetRows(table1->tableInfo(), table1Keys,
-                [&](Error::Ptr&& error, std::vector<Entry::Ptr>&& entries) {
-                    BOOST_CHECK_EQUAL(error, nullptr);
+            rocksDBStorage->asyncGetRows(table1->tableInfo()->name(), table1Keys,
+                [&](Error::UniquePtr&& error, std::vector<std::optional<Entry>>&& entries) {
+                    BOOST_CHECK_EQUAL(error.get(), nullptr);
                     BOOST_CHECK_EQUAL(entries.size(), 10);
 
                     for (size_t i = 0; i < 10; ++i)
@@ -344,18 +388,19 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
                 });
         });
 
-    rocksDBStorage->asyncGetPrimaryKeys(
-        table2->tableInfo(), nullptr, [&](Error::Ptr&& error, std::vector<std::string>&& keys) {
-            BOOST_CHECK_EQUAL(error, nullptr);
+    rocksDBStorage->asyncGetPrimaryKeys(table2->tableInfo()->name(),
+        std::optional<storage::Condition const>(),
+        [&](Error::UniquePtr&& error, std::vector<std::string>&& keys) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(keys.size(), 10);
 
             std::sort(table2Keys.begin(), table2Keys.end());
             BOOST_CHECK_EQUAL_COLLECTIONS(
                 table2Keys.begin(), table2Keys.end(), keys.begin(), keys.end());
 
-            rocksDBStorage->asyncGetRows(table2->tableInfo(), table2Keys,
-                [&](Error::Ptr&& error, std::vector<Entry::Ptr>&& entries) {
-                    BOOST_CHECK_EQUAL(error, nullptr);
+            rocksDBStorage->asyncGetRows(table2->tableInfo()->name(), table2Keys,
+                [&](Error::UniquePtr&& error, std::vector<std::optional<Entry>>&& entries) {
+                    BOOST_CHECK_EQUAL(error.get(), nullptr);
                     BOOST_CHECK_EQUAL(entries.size(), 10);
 
                     for (size_t i = 0; i < 10; ++i)
@@ -366,7 +411,7 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
                 });
         });
 
-    cleanupNonTableData();
+    cleanupTestTableData();
 }
 
 BOOST_AUTO_TEST_CASE(boostSerialize)
@@ -455,4 +500,3 @@ BOOST_AUTO_TEST_CASE(rocksDBiter)
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace bcos::test
-#endif

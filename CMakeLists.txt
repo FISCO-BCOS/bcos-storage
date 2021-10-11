@@ -25,9 +25,9 @@ FetchContent_MakeAvailable(bcos-cmake-scripts)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/ ${BCOS_CMAKE_SCRIPTS_DIR})
 
 # init hunter
-set(HUNTER_PACKAGE_LOG_BUILD OFF CACHE STRING "Hunter output build info to log" FORCE)
+set(HUNTER_PACKAGE_LOG_BUILD ON CACHE STRING "Hunter output build info to log" FORCE)
 set(HUNTER_PACKAGE_LOG_INSTALL ON CACHE STRING "Hunter output install info to log" FORCE)
-set(HUNTER_STATUS_DEBUG ON CACHE STRING "Hunter debug output" FORCE)
+set(HUNTER_STATUS_DEBUG OFF CACHE STRING "Hunter debug output" FORCE)
 set(HUNTER_USE_CACHE_SERVERS NO CACHE STRING "Download cache from cache server" FORCE)
 set(HUNTER_CONFIGURATION_TYPES Release CACHE STRING "Build type of Hunter packages")
 # set(HUNTER_STATUS_PRINT OFF CACHE STRING "Hunter status output")

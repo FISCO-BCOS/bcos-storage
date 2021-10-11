@@ -57,8 +57,8 @@ jobs:
         run: bash cmake/scripts/shell/check-commit.sh 3000 "https://api.github.com/repos/FISCO-BCOS/bcos-storage"
       - name: compile
         run: make -j2
-      # - name: run test
-        # run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      - name: run test
+        run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
   ubuntu20_04_build_with_gcc:
     name: build20_04_with_gcc
     runs-on: ${{ matrix.os }}
@@ -86,8 +86,8 @@ jobs:
         run: cmake . -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON #-DTOOLS=on
       - name: compile
         run: make -j2
-      # - name: run test
-        # run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      - name: run test
+        run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
   ubuntu18_04_build_with_gcc:
     name: ubuntu18_04_build_with_gcc
     runs-on: ${{ matrix.os }}
@@ -117,16 +117,16 @@ jobs:
         run: cmake . -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON -DCOVERAGE=ON
       - name: compile
         run: make -j2
-      # - name: run test
-        # run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
-      # - name: generate coverage
-      #   run: make coverage
-      # - name: upload code coverage to Codecov
-      #   uses: codecov/codecov-action@v1
-      #   with:
-      #     file: ./coverage.info
-      #     name: code coverage
-      #     fail_ci_if_error: true
+      - name: run test
+        run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      - name: generate coverage
+        run: make coverage
+      - name: upload code coverage to Codecov
+        uses: codecov/codecov-action@v1
+        with:
+          file: ./coverage.info
+          name: code coverage
+          fail_ci_if_error: true
   build_centos_with_gcc:
     name: build_centos_with_gcc
     runs-on: ubuntu-latest
@@ -165,4 +165,4 @@ jobs:
           mkdir -p build && cd build
           cmake3 .. -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON
           make -j2
-        # CTEST_OUTPUT_ON_FAILURE=TRUE make test
+          CTEST_OUTPUT_ON_FAILURE=TRUE make test
