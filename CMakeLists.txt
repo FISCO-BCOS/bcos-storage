@@ -50,7 +50,7 @@ include(Options)
 configure_project()
 include(CompilerSettings)
 include(InstallConfig)
-include(ProjectTiKVClient)
+# include(ProjectTiKVClient)
 hunter_add_package(zstd)
 find_package(zstd CONFIG REQUIRED)
 

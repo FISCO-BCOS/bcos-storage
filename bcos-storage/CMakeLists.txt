@@ -1,22 +1,18 @@
 
 include(GNUInstallDirs)
-file(GLOB SRC_LIST "*.cpp")
-file(GLOB HEADERS "*.h")
-
 # compile rocksDB
 
 # set(zstd_ROOT ${ZSTD_ROOT})
 hunter_add_package(rocksdb)
 find_package(RocksDB CONFIG REQUIRED)
 
-add_library(${STORAGE_TARGET} ${SRC_LIST} ${HEADERS})
+add_library(${STORAGE_TARGET} Common.cpp RocksDBStorage.cpp)
 
 find_package(Boost CONFIG QUIET REQUIRED serialization)
 find_package(Threads REQUIRED)
 
-# target_include_directories(${STORAGE_TARGET} PRIVATE ../include)
-target_link_libraries(${STORAGE_TARGET} PUBLIC bcos::tikv_client tbb::tbb Boost::serialization RocksDB::rocksdb zstd::libzstd_static Threads::Threads bcos-framework::utilities)
-# target_compile_options(storage PRIVATE -Wno-error)
+# target_link_libraries(${STORAGE_TARGET} PUBLIC bcos::tikv_client tbb::tbb Boost::serialization RocksDB::rocksdb zstd::libzstd_static Threads::Threads bcos-framework::utilities)
+target_link_libraries(${STORAGE_TARGET} PUBLIC tbb::tbb Boost::serialization RocksDB::rocksdb zstd::libzstd_static Threads::Threads bcos-framework::utilities)
 
 install(
     TARGETS ${STORAGE_TARGET}
