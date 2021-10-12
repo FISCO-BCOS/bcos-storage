@@ -103,7 +103,7 @@ void TiKVStorage::asyncGetRows(const std::string_view& _table,
     std::function<void(Error::UniquePtr&&, std::vector<std::optional<Entry>>&&)> _callback) noexcept
 {
     try
-    {  // FIXME: add batch get of tikv client and use it
+    {
         std::visit(
             [&](auto const& keys) {
                 std::vector<std::optional<Entry>> entries(keys.size());
@@ -114,6 +114,29 @@ void TiKVStorage::asyncGetRows(const std::string_view& _table,
                                   -1, "asyncGetRows failed because can't get TableInfo!"),
                         std::vector<std::optional<Entry>>());
                 }
+
+                std::vector<std::string> realKeys(keys.size());
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
+                    [&](const tbb::blocked_range<size_t>& range) {
+                        for (size_t i = range.begin(); i != range.end(); ++i)
+                        {
+                            realKeys[i] = toDBKey(_table, keys[i]);
+                        }
+                    });
+                auto result = m_snapshot->BatchGet(realKeys);
+
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
+                    [&](const tbb::blocked_range<size_t>& range) {
+                        for (size_t i = range.begin(); i != range.end(); ++i)
+                        {
+                            auto value = result[realKeys[i]];
+                            if (!value.empty())
+                            {
+                                entries[i] = decodeEntry(tableInfo, value);
+                            }
+                        }
+                    });
+
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
                     [&](const tbb::blocked_range<size_t>& range) {
                         for (size_t i = range.begin(); i != range.end(); ++i)
@@ -239,7 +262,7 @@ void TiKVStorage::asyncRollback(
 }
 
 TableInfo::ConstPtr TiKVStorage::getTableInfo(const std::string_view& tableName)
-{
+{  // TODO: move this function to TransactionalStorageInterface
     std::promise<TableInfo::ConstPtr> prom;
     asyncOpenTable(tableName, [&prom](Error::UniquePtr&& error, std::optional<Table>&& table) {
         if (error || !table)

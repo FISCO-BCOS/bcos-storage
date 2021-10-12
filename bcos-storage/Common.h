@@ -27,7 +27,7 @@ namespace bcos::storage
 {
 const char* const TABLE_KEY_SPLIT = ":";
 
-std::string toDBKey(const std::string_view& tableName, const std::string_view& key)
+inline std::string toDBKey(const std::string_view& tableName, const std::string_view& key)
 {
     std::string dbKey;
     dbKey.append(tableName).append(TABLE_KEY_SPLIT).append(key);

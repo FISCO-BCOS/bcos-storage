@@ -20,16 +20,16 @@
  */
 #include "RocksDBStorage.h"
 #include "Common.h"
+#include "bcos-framework/interfaces/storage/Table.h"
 #include "bcos-framework/libutilities/Error.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/interfaces/storage/Table.h"
 #include <rocksdb/cleanable.h>
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/spin_mutex.h>
-#include <future>
 #include <exception>
+#include <future>
 
 using namespace bcos::storage;
 using namespace rocksdb;
@@ -103,12 +103,14 @@ void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::stri
         {
             _callback(BCOS_ERROR_UNIQUE_PTR(-1, "asyncGetRow failed because can't get TableInfo!"),
                 std::optional<Entry>());
+            return;
         }
         _callback(nullptr, decodeEntry(tableInfo, value.ToStringView()));
     }
     catch (const std::exception& e)
     {
-        _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get row failed!", e), std::optional<Entry>());
+        _callback(
+            BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get row failed!", e), std::optional<Entry>());
     }
 }
 
@@ -144,6 +146,7 @@ void RocksDBStorage::asyncGetRows(const std::string_view& _table,
                     _callback(BCOS_ERROR_UNIQUE_PTR(
                                   -1, "asyncGetRows failed because can't get TableInfo!"),
                         std::vector<std::optional<Entry>>());
+                    return;
                 }
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
                     [&](const tbb::blocked_range<size_t>& range) {
@@ -285,19 +288,26 @@ void RocksDBStorage::asyncRollback(
 }
 
 TableInfo::ConstPtr RocksDBStorage::getTableInfo(const std::string_view& tableName)
-{
+{  // TODO: move this function to TransactionalStorageInterface
     std::promise<TableInfo::ConstPtr> prom;
-    asyncOpenTable(tableName, [&prom](Error::UniquePtr&& error, std::optional<Table>&& table) {
-        if (error || !table)
-        {
-            STORAGE_LOG(WARNING) << "asyncGetRow get TableInfo failed"
-                                 << LOG_KV("message", error->errorMessage());
-            prom.set_value(nullptr);
-        }
-        else
-        {
-            prom.set_value(table->tableInfo());
-        }
-    });
+    asyncOpenTable(
+        tableName, [&prom, &tableName](Error::UniquePtr&& error, std::optional<Table>&& table) {
+            if (error)
+            {
+                STORAGE_LOG(WARNING) << "getTableInfo failed" << LOG_KV("tableName", tableName)
+                                     << LOG_KV("message", error->errorMessage());
+                prom.set_value(nullptr);
+            }
+            else if (!table)
+            {
+                STORAGE_LOG(WARNING)
+                    << "getTableInfo failed, table doesn't exist" << LOG_KV("tableName", tableName);
+                prom.set_value(nullptr);
+            }
+            else
+            {
+                prom.set_value(table->tableInfo());
+            }
+        });
     return prom.get_future().get();
 }
