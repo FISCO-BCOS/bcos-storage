@@ -71,7 +71,6 @@ public:
         const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept override;
 
 private:
-    TableInfo::ConstPtr getTableInfo(const std::string_view& tableName) noexcept override;
 
     std::shared_ptr<pingcap::kv::Cluster> m_cluster;
     std::shared_ptr<pingcap::kv::Snapshot> m_snapshot = nullptr;

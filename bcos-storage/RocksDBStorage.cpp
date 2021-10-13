@@ -286,28 +286,3 @@ void RocksDBStorage::asyncRollback(
     std::ignore = params;
     callback(nullptr);
 }
-
-TableInfo::ConstPtr RocksDBStorage::getTableInfo(const std::string_view& tableName) noexcept
-{  // TODO: move this function to TransactionalStorageInterface
-    std::promise<TableInfo::ConstPtr> prom;
-    asyncOpenTable(
-        tableName, [&prom, &tableName](Error::UniquePtr&& error, std::optional<Table>&& table) {
-            if (error)
-            {
-                STORAGE_LOG(WARNING) << "getTableInfo failed" << LOG_KV("tableName", tableName)
-                                     << LOG_KV("message", error->errorMessage());
-                prom.set_value(nullptr);
-            }
-            else if (!table)
-            {
-                STORAGE_LOG(WARNING)
-                    << "getTableInfo failed, table doesn't exist" << LOG_KV("tableName", tableName);
-                prom.set_value(nullptr);
-            }
-            else
-            {
-                prom.set_value(table->tableInfo());
-            }
-        });
-    return prom.get_future().get();
-}

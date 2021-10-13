@@ -255,26 +255,10 @@ void TiKVStorage::asyncCommit(
 
 void TiKVStorage::asyncRollback(
     const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept
-{  // FIXME: add support of rollback
+{
     std::ignore = params;
+    m_committer->rollback();
     m_committer = nullptr;
     callback(nullptr);
 }
 
-TableInfo::ConstPtr TiKVStorage::getTableInfo(const std::string_view& tableName) noexcept
-{  // TODO: move this function to TransactionalStorageInterface
-    std::promise<TableInfo::ConstPtr> prom;
-    asyncOpenTable(tableName, [&prom](Error::UniquePtr&& error, std::optional<Table>&& table) {
-        if (error || !table)
-        {
-            STORAGE_LOG(WARNING) << "asyncGetRow get TableInfo failed"
-                                 << LOG_KV("message", error->errorMessage());
-            prom.set_value(nullptr);
-        }
-        else
-        {
-            prom.set_value(table->tableInfo());
-        }
-    });
-    return prom.get_future().get();
-}
