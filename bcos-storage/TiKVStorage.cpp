@@ -261,7 +261,7 @@ void TiKVStorage::asyncRollback(
     callback(nullptr);
 }
 
-TableInfo::ConstPtr TiKVStorage::getTableInfo(const std::string_view& tableName)
+TableInfo::ConstPtr TiKVStorage::getTableInfo(const std::string_view& tableName) noexcept
 {  // TODO: move this function to TransactionalStorageInterface
     std::promise<TableInfo::ConstPtr> prom;
     asyncOpenTable(tableName, [&prom](Error::UniquePtr&& error, std::optional<Table>&& table) {

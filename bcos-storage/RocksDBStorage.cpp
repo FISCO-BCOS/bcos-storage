@@ -287,7 +287,7 @@ void RocksDBStorage::asyncRollback(
     callback(nullptr);
 }
 
-TableInfo::ConstPtr RocksDBStorage::getTableInfo(const std::string_view& tableName)
+TableInfo::ConstPtr RocksDBStorage::getTableInfo(const std::string_view& tableName) noexcept
 {  // TODO: move this function to TransactionalStorageInterface
     std::promise<TableInfo::ConstPtr> prom;
     asyncOpenTable(

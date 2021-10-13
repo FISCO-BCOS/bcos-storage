@@ -58,8 +58,8 @@ public:
         std::function<void(Error::UniquePtr&&, std::vector<std::optional<Entry>>&&)>
             _callback) noexcept override;
 
-    void asyncSetRow(const std::string_view& table, const std::string_view& key,
-        Entry entry, std::function<void(Error::UniquePtr&&)> callback) noexcept override;
+    void asyncSetRow(const std::string_view& table, const std::string_view& key, Entry entry,
+        std::function<void(Error::UniquePtr&&)> callback) noexcept override;
 
     void asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface::ConstPtr& storage,
         std::function<void(Error::Ptr&&, uint64_t)> callback) noexcept override;
@@ -71,8 +71,7 @@ public:
         const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept override;
 
 private:
-
-    TableInfo::ConstPtr getTableInfo(const std::string_view& tableName);
+    TableInfo::ConstPtr getTableInfo(const std::string_view& tableName) noexcept override;
 
     std::shared_ptr<pingcap::kv::Cluster> m_cluster;
     std::shared_ptr<pingcap::kv::Snapshot> m_snapshot = nullptr;

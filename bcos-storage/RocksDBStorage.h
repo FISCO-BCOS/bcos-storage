@@ -69,7 +69,7 @@ public:
         const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept override;
 
 private:
-    TableInfo::ConstPtr getTableInfo(const std::string_view& tableName);
+    TableInfo::ConstPtr getTableInfo(const std::string_view& tableName) noexcept override;
 
     std::shared_ptr<rocksdb::WriteBatch> m_writeBatch = nullptr;
     tbb::spin_mutex m_writeBatchMutex;
