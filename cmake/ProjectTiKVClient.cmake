@@ -12,7 +12,7 @@ find_package (Poco REQUIRED Foundation Net JSON Util)
 set(ENV{PATH} ${GRPC_ROOT}/bin:$ENV{PATH})
 FetchContent_Declare(tikv_client_project
   GIT_REPOSITORY https://${URL_BASE}/bxq2011hust/client-c.git
-  GIT_TAG        2a3fca44cefe6d67ff19ded6171e66ade0d4f1c4
+  GIT_TAG        2bcd40b1aeb22b27dfb60edd72c210a55b839a52
   # SOURCE_DIR     ${CMAKE_SOURCE_DIR}/deps/src/
   PATCH_COMMAND  export PATH=${GRPC_ROOT}/bin:\$PATH COMMAND protoc --version COMMAND bash third_party/kvproto/scripts/generate_cpp.sh
   # LOG_BUILD true
