@@ -35,6 +35,8 @@ using namespace bcos::storage;
 using namespace rocksdb;
 using namespace std;
 
+#define STORAGE_ROCKSDB_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE-RocksDB]"
+
 RocksDBStorage::RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db) : m_db(std::move(db))
 {
     m_writeBatch = std::make_shared<WriteBatch>();
@@ -72,6 +74,8 @@ void RocksDBStorage::asyncGetPrimaryKeys(const std::string_view& _table,
 void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::string_view& _key,
     std::function<void(Error::UniquePtr&&, std::optional<Entry>&&)> _callback) noexcept
 {
+    STORAGE_ROCKSDB_LOG(DEBUG) << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
+                               << LOG_KV("key", _key);
     try
     {
         PinnableSlice value;
@@ -94,14 +98,15 @@ void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::stri
             {
                 errorMessage.append(" ").append(status.getState());
             }
-            _callback(BCOS_ERROR_UNIQUE_PTR(-1, errorMessage), std::optional<Entry>());
+            _callback(BCOS_ERROR_UNIQUE_PTR(ReadError, errorMessage), std::optional<Entry>());
 
             return;
         }
         TableInfo::ConstPtr tableInfo = getTableInfo(_table);
         if (!tableInfo)
         {
-            _callback(BCOS_ERROR_UNIQUE_PTR(-1, "asyncGetRow failed because can't get TableInfo!"),
+            _callback(BCOS_ERROR_UNIQUE_PTR(
+                          TableNotExists, "asyncGetRow failed because can't get TableInfo!"),
                 std::optional<Entry>());
             return;
         }
@@ -109,8 +114,8 @@ void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::stri
     }
     catch (const std::exception& e)
     {
-        _callback(
-            BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get row failed!", e), std::optional<Entry>());
+        _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "Get row failed!", e),
+            std::optional<Entry>());
     }
 }
 
@@ -119,6 +124,7 @@ void RocksDBStorage::asyncGetRows(const std::string_view& _table,
         _keys,
     std::function<void(Error::UniquePtr&&, std::vector<std::optional<Entry>>&&)> _callback) noexcept
 {
+    STORAGE_ROCKSDB_LOG(DEBUG) << LOG_DESC("asyncGetRows") << LOG_KV("table", _table);
     try
     {
         std::visit(
@@ -143,8 +149,8 @@ void RocksDBStorage::asyncGetRows(const std::string_view& _table,
                 TableInfo::ConstPtr tableInfo = getTableInfo(_table);
                 if (!tableInfo)
                 {
-                    _callback(BCOS_ERROR_UNIQUE_PTR(
-                                  -1, "asyncGetRows failed because can't get TableInfo!"),
+                    _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists,
+                                  "asyncGetRows failed because can't get TableInfo!"),
                         std::vector<std::optional<Entry>>());
                     return;
                 }
@@ -184,7 +190,7 @@ void RocksDBStorage::asyncGetRows(const std::string_view& _table,
     }
     catch (const std::exception& e)
     {
-        _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get rows failed! ", e),
+        _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "Get rows failed! ", e),
             std::vector<std::optional<Entry>>());
     }
 }
@@ -192,6 +198,8 @@ void RocksDBStorage::asyncGetRows(const std::string_view& _table,
 void RocksDBStorage::asyncSetRow(const std::string_view& _table, const std::string_view& _key,
     Entry _entry, std::function<void(Error::UniquePtr&&)> _callback) noexcept
 {
+    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncSetRow") << LOG_KV("table", _table)
+                              << LOG_KV("key", _key);
     try
     {
         auto dbKey = toDBKey(_table, _key);
@@ -214,7 +222,7 @@ void RocksDBStorage::asyncSetRow(const std::string_view& _table, const std::stri
             {
                 errorMessage.append(" ").append(status.getState());
             }
-            _callback(BCOS_ERROR_UNIQUE_PTR(-1, errorMessage));
+            _callback(BCOS_ERROR_UNIQUE_PTR(WriteError, errorMessage));
             return;
         }
 
@@ -222,7 +230,7 @@ void RocksDBStorage::asyncSetRow(const std::string_view& _table, const std::stri
     }
     catch (const std::exception& e)
     {
-        _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Set row failed! ", e));
+        _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "Set row failed! ", e));
     }
 }
 
@@ -230,6 +238,8 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param,
     const TraverseStorageInterface::ConstPtr& storage,
     std::function<void(Error::Ptr&&, uint64_t startTS)> callback) noexcept
 {
+    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number)
+                              << LOG_KV("startTS", param.startTS);
     std::ignore = param;
     try
     {
@@ -261,13 +271,15 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param,
     }
     catch (const std::exception& e)
     {
-        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Prepare failed! ", e), 0);
+        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "Prepare failed! ", e), 0);
     }
 }
 
 void RocksDBStorage::asyncCommit(
     const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept
 {
+    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncCommit") << LOG_KV("number", params.number)
+                              << LOG_KV("startTS", params.startTS);
     std::ignore = params;
     {
         tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
@@ -283,6 +295,12 @@ void RocksDBStorage::asyncCommit(
 void RocksDBStorage::asyncRollback(
     const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept
 {
+    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("number", params.number)
+                              << LOG_KV("startTS", params.startTS);
     std::ignore = params;
+    {
+        tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
+        m_writeBatch = nullptr;
+    }
     callback(nullptr);
 }
