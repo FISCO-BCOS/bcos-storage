@@ -36,7 +36,7 @@ include(HunterGate)
 HunterGate(
     URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/32b5a266ff0e808b2ed57afa3d351f7bb899c9f6.tar.gz"
     SHA1 "4fbc308a612c3ca3be7e03a54c4c4d27ba7804ed"
-    FILEPATH "${CMAKE_SOURCE_DIR}/cmake/config.cmake"
+    FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.cmake"
 )
 
 # set CMP0074 to NEW to suppress warnning, https://cmake.org/cmake/help/latest/policy/CMP0074.html
@@ -50,15 +50,22 @@ include(Options)
 configure_project()
 include(CompilerSettings)
 include(InstallConfig)
-# include(ProjectTiKVClient)
+
 hunter_add_package(zstd)
 find_package(zstd CONFIG REQUIRED)
+
+if(USE_TiKV)
+    message(STATUS "USE_TiKV: ${USE_TiKV}")
+    include(ProjectTiKVClient)
+endif()
 
 # install bcos-framework
 include(InstallBcosFrameworkDependencies)
 
 set(STORAGE_TARGET "bcos-storage")
 add_subdirectory(bcos-storage)
+
+option(USE_TiKV "build tikv storage or not" OFF)
 
 install(
     DIRECTORY "bcos-storage"
