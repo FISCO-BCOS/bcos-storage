@@ -1,5 +1,11 @@
 include(FetchContent)
 
+if (APPLE)
+    set(SED_CMMAND sed -i .bkp)
+else()
+    set(SED_CMMAND sed -i)
+endif()
+
 hunter_add_package(OpenSSL)
 find_package(OpenSSL REQUIRED)
 hunter_add_package(Protobuf)
@@ -12,9 +18,9 @@ find_package (Poco REQUIRED Foundation Net JSON Util)
 set(ENV{PATH} ${GRPC_ROOT}/bin:$ENV{PATH})
 FetchContent_Declare(tikv_client_project
   GIT_REPOSITORY https://${URL_BASE}/bxq2011hust/client-c.git
-  GIT_TAG        2bcd40b1aeb22b27dfb60edd72c210a55b839a52
+  GIT_TAG        989437a63b5b7b09584ba12720b3f20d2b4a941a
   # SOURCE_DIR     ${CMAKE_SOURCE_DIR}/deps/src/
-  PATCH_COMMAND  export PATH=${GRPC_ROOT}/bin:\$PATH COMMAND protoc --version COMMAND bash third_party/kvproto/scripts/generate_cpp.sh
+  PATCH_COMMAND  export PATH=${GRPC_ROOT}/bin:\$PATH COMMAND protoc --version COMMAND bash third_party/kvproto/scripts/generate_cpp.sh COMMAND ${SED_CMMAND} "s#PUBLIC#PRIVATE#g" third_party/kvproto/cpp/CMakeLists.txt
   # LOG_BUILD true
 )
 
@@ -29,6 +35,15 @@ if(NOT tikv_client_project_POPULATED)
   target_compile_options(kv_client PRIVATE -Wno-error -Wno-unused-parameter)
 endif()
 
-add_library(bcos::tikv_client INTERFACE IMPORTED)
-set_property(TARGET bcos::tikv_client PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${tikv_client_project_SOURCE_DIR}/include ${GRPC_ROOT}/include)
-set_property(TARGET bcos::tikv_client PROPERTY INTERFACE_LINK_LIBRARIES kv_client gRPC::grpc++ Poco::Foundation)
+# add_library(bcos::tikv_client INTERFACE IMPORTED)
+# set_property(TARGET bcos::tikv_client PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${tikv_client_project_SOURCE_DIR}/include ${GRPC_ROOT}/include)
+# set_property(TARGET bcos::tikv_client PROPERTY INTERFACE_LINK_LIBRARIES kv_client gRPC::grpc++ Poco::Foundation)
+
+install(
+  TARGETS kv_client fiu kvproto
+  EXPORT "${TARGETS_EXPORT_NAME}"
+  # LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  # RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+  # INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/bcos-storage"
+)
