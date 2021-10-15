@@ -19,7 +19,7 @@ find_package(Threads REQUIRED)
 # target_link_libraries(${STORAGE_TARGET} PUBLIC bcos::tikv_client tbb::tbb Boost::serialization RocksDB::rocksdb zstd::libzstd_static Threads::Threads bcos-framework::utilities)
 target_link_libraries(${STORAGE_TARGET} PUBLIC tbb::tbb Boost::serialization RocksDB::rocksdb zstd::libzstd_static Threads::Threads bcos-framework::utilities)
 if(USE_TiKV)
-    target_link_libraries(${STORAGE_TARGET} PUBLIC bcos::tikv_client)
+    target_link_libraries(${STORAGE_TARGET} PUBLIC kv_client)
 endif()
 
 install(
