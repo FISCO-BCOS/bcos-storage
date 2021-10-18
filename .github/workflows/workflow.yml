@@ -46,19 +46,31 @@ jobs:
       - name: install Ubuntu dependencies
         if: runner.os == 'Linux'
         run: sudo apt install -y git curl build-essential clang cmake ccache libzstd-dev autoconf automake libtool shtool
+      - name: prepare TiKV
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /Users/runner/.bash_profile
+          tiup update --self && tiup update playground
+          tiup clean --all
+        # tiup playground v5.2.1 --mode tikv-slim &
       - name: configure
         if: runner.os == 'macOS'
-        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DTESTS=ON
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DTESTS=ON -DUSE_TiKV=ON -DDISABLE_TIKV_TESTS=on
       - name: configure
         if: runner.os == 'Linux'
-        run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DTESTS=ON
+        run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DTESTS=ON -DUSE_TiKV=ON
       - name: check commit
         if: ${{ runner.os == 'Linux' && github.base_ref != 'master' && github.event_name == 'pull_request' }}
         run: bash cmake/scripts/shell/check-commit.sh 3000 "https://api.github.com/repos/FISCO-BCOS/bcos-storage"
       - name: compile
         run: make -j2
       - name: run test
-        run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
+        run: |
+          source /Users/runner/.bash_profile
+          tiup clean --all
+          tiup playground v5.2.1 --mode tikv-slim &
+          sleep 10
+          CTEST_OUTPUT_ON_FAILURE=TRUE make test
   ubuntu20_04_build_with_gcc:
     name: build20_04_with_gcc
     runs-on: ${{ matrix.os }}
@@ -82,8 +94,15 @@ jobs:
             hunter-gcc-v1-notest-${{ runner.temp }}-
       - name: install Ubuntu dependencies
         run: sudo apt install -y git curl build-essential cmake ccache libzstd-dev autoconf libtool pkg-config
+      - name: prepare TiKV
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /home/runner/.profile
+          tiup update --self && tiup update playground
+          tiup clean --all
+          tiup playground v5.2.1 --mode tikv-slim &
       - name: configure
-        run: cmake . -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON #-DTOOLS=on
+        run: cmake . -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON -DUSE_TiKV=ON #-DTOOLS=on
       - name: compile
         run: make -j2
       - name: run test
@@ -113,8 +132,15 @@ jobs:
             hunter-ubuntu-v1-notest-${{ runner.temp }}-
       - name: install Ubuntu dependencies
         run: sudo apt install -y git curl build-essential cmake ccache lcov libzstd-dev autoconf libtool pkg-config
+      - name: prepare TiKV
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /home/runner/.profile
+          tiup update --self && tiup update playground
+          tiup clean --all
+          tiup playground v5.2.1 --mode tikv-slim &
       - name: configure
-        run: cmake . -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON -DCOVERAGE=ON
+        run: cmake . -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON -DUSE_TiKV=ON -DCOVERAGE=ON
       - name: compile
         run: make -j2
       - name: run test
@@ -159,10 +185,24 @@ jobs:
         run: |
           yum install -y epel-release centos-release-scl
           yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache devtoolset-7 libzstd-devel && source /opt/rh/devtoolset-7/enable
+      # - name: prepare TiKV
+      #   run: |
+      #     mkdir -p /root/.tiup/bin/
+      #     curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+      #     source /github/home/.profile
+      #     tiup update --self && tiup update playground
+      #     tiup playground v5.2.1 --mode tikv-slim &
       - name: configure and compile
         run: |
           source /opt/rh/devtoolset-7/enable
           mkdir -p build && cd build
-          cmake3 .. -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON
+          cmake3 .. -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON -DUSE_TiKV=ON
           make -j2
+          mkdir -p /root/.tiup/bin/
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /github/home/.profile
+          tiup update --self && tiup update playground
+          tiup clean --all
+          tiup playground v5.2.1 --mode tikv-slim &
+          sleep 10
           CTEST_OUTPUT_ON_FAILURE=TRUE make test

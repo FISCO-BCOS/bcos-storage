@@ -42,6 +42,8 @@ HunterGate(
 # set CMP0074 to NEW to suppress warnning, https://cmake.org/cmake/help/latest/policy/CMP0074.html
 cmake_policy(VERSION 3.12)
 cmake_policy(SET CMP0074 NEW)
+cmake_policy(SET CMP0079 NEW)
+cmake_policy(SET CMP0063 NEW)
 
 project(bcos-storage VERSION "3.0.0")
 
@@ -79,6 +81,7 @@ if(TOOLS)
 endif()
 
 if (TESTS)
+    set(USE_TiKV ON)
     enable_testing()
     set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
     add_subdirectory(test)
