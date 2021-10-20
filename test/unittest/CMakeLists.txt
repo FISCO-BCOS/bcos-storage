@@ -20,16 +20,19 @@ file(GLOB_RECURSE SOURCES "*.cpp" "*.h")
 
 include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-storage)
-config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
+if(DISABLE_TIKV_TESTS)
+    set(EXCLUDE_SUITES "TestTiKVStorage")
+endif()
+config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "${EXCLUDE_SUITES}")
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../../bcos-storage)
 
 find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework ${STORAGE_TARGET} bcos-framework::utilities
+target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework bcos-framework::utilities
                         bcos-framework::protocol bcos-framework::protocol-pb bcos-framework::codec
-                        bcos-framework::storage)
+                        bcos-framework::storage ${STORAGE_TARGET})
 
 # for code coverage
 if (COVERAGE)

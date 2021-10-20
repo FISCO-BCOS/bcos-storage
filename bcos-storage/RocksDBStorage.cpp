@@ -88,7 +88,7 @@ void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::stri
         {
             if (status.IsNotFound())
             {
-                _callback(nullptr, std::optional<Entry>());
+                _callback(nullptr, {});
                 return;
             }
 
@@ -98,7 +98,7 @@ void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::stri
             {
                 errorMessage.append(" ").append(status.getState());
             }
-            _callback(BCOS_ERROR_UNIQUE_PTR(ReadError, errorMessage), std::optional<Entry>());
+            _callback(BCOS_ERROR_UNIQUE_PTR(ReadError, errorMessage), {});
 
             return;
         }
@@ -107,15 +107,14 @@ void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::stri
         {
             _callback(BCOS_ERROR_UNIQUE_PTR(
                           TableNotExists, "asyncGetRow failed because can't get TableInfo!"),
-                std::optional<Entry>());
+                {});
             return;
         }
         _callback(nullptr, decodeEntry(tableInfo, value.ToStringView()));
     }
     catch (const std::exception& e)
     {
-        _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "Get row failed!", e),
-            std::optional<Entry>());
+        _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "Get row failed!", e), {});
     }
 }
 
@@ -198,8 +197,6 @@ void RocksDBStorage::asyncGetRows(const std::string_view& _table,
 void RocksDBStorage::asyncSetRow(const std::string_view& _table, const std::string_view& _key,
     Entry _entry, std::function<void(Error::UniquePtr&&)> _callback) noexcept
 {
-    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncSetRow") << LOG_KV("table", _table)
-                              << LOG_KV("key", _key);
     try
     {
         auto dbKey = toDBKey(_table, _key);
@@ -207,10 +204,14 @@ void RocksDBStorage::asyncSetRow(const std::string_view& _table, const std::stri
         rocksdb::Status status;
         if (_entry.status() == Entry::DELETED)
         {
+            STORAGE_ROCKSDB_LOG(DEBUG)
+                << LOG_DESC("asyncSetRow delete") << LOG_KV("table", _table) << LOG_KV("key", _key);
             status = m_db->Delete(options, dbKey);
         }
         else
         {
+            STORAGE_ROCKSDB_LOG(DEBUG)
+                << LOG_DESC("asyncSetRow") << LOG_KV("table", _table) << LOG_KV("key", _key);
             std::string value = encodeEntry(_entry);
             status = m_db->Put(options, dbKey, value);
         }

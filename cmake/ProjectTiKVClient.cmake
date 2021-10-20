@@ -18,7 +18,7 @@ find_package (Poco REQUIRED Foundation Net JSON Util)
 set(ENV{PATH} ${GRPC_ROOT}/bin:$ENV{PATH})
 FetchContent_Declare(tikv_client_project
   GIT_REPOSITORY https://${URL_BASE}/bxq2011hust/client-c.git
-  GIT_TAG        989437a63b5b7b09584ba12720b3f20d2b4a941a
+  GIT_TAG        18bad449c47633b63c326ea3b04602e2a9fd9971
   # SOURCE_DIR     ${CMAKE_SOURCE_DIR}/deps/src/
   PATCH_COMMAND  export PATH=${GRPC_ROOT}/bin:\$PATH COMMAND protoc --version COMMAND bash third_party/kvproto/scripts/generate_cpp.sh COMMAND ${SED_CMMAND} "s#PUBLIC#PRIVATE#g" third_party/kvproto/cpp/CMakeLists.txt
   # LOG_BUILD true
@@ -45,5 +45,5 @@ install(
   # LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
   # RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-  # INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/bcos-storage"
+  INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/bcos-storage"
 )

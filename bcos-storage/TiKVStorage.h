@@ -33,15 +33,21 @@ struct Snapshot;
 }  // namespace kv
 }  // namespace pingcap
 
-namespace bcos::storage
+namespace bcos
 {
+namespace storage
+{
+std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(const std::vector<std::string>& pdAddrs);
+
 class TiKVStorage : public TransactionalStorageInterface
 {
 public:
     using Ptr = std::shared_ptr<TiKVStorage>;
-    explicit TiKVStorage(const std::shared_ptr<pingcap::kv::Cluster>& _cluster);
+    explicit TiKVStorage(const std::shared_ptr<pingcap::kv::Cluster>& _cluster)
+      : m_cluster(_cluster)
+    {}
 
-    ~TiKVStorage() {}
+    virtual ~TiKVStorage() {}
 
     void asyncGetPrimaryKeys(const std::string_view& _table,
         const std::optional<Condition const>& _condition,
@@ -71,9 +77,8 @@ public:
         const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept override;
 
 private:
-
     std::shared_ptr<pingcap::kv::Cluster> m_cluster;
-    std::shared_ptr<pingcap::kv::Snapshot> m_snapshot = nullptr;
     std::shared_ptr<pingcap::kv::BCOSTwoPhaseCommitter> m_committer;
 };
-}  // namespace bcos::storage
+}  // namespace storage
+}  // namespace bcos

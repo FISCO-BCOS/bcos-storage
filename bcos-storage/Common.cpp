@@ -33,7 +33,8 @@ using namespace std;
 
 namespace bcos::storage
 {
-std::string encodeEntry(const Entry& entry) {
+std::string encodeEntry(const Entry& entry)
+{
     std::string value;
     boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
     boost::archive::binary_oarchive archive(outputStream,
@@ -54,7 +55,8 @@ std::string encodeEntry(const Entry& entry) {
     return value;
 }
 
-std::optional<Entry> decodeEntry(TableInfo::ConstPtr tableInfo, const std::string_view& buffer) {
+std::optional<Entry> decodeEntry(TableInfo::ConstPtr tableInfo, const std::string_view& buffer)
+{
     Entry entry(tableInfo);
 
     boost::iostreams::stream<boost::iostreams::array_source> inputStream(
@@ -64,9 +66,11 @@ std::optional<Entry> decodeEntry(TableInfo::ConstPtr tableInfo, const std::strin
 
     std::vector<std::string> data;
     archive >> data;
-
+    if (data.empty())
+    {
+        return {};
+    }
     entry.importFields(std::move(data));
-
     return std::optional<Entry>(entry);
 }
 

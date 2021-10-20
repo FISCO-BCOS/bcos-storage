@@ -24,6 +24,7 @@
 #include "bcos-framework/libutilities/Error.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
 #include "pingcap/kv/BCOS2PC.h"
+#include "pingcap/kv/Cluster.h"
 #include "pingcap/kv/Scanner.h"
 #include "pingcap/kv/Snapshot.h"
 #include "pingcap/kv/Txn.h"
@@ -36,12 +37,18 @@ using namespace pingcap::kv;
 using namespace std;
 
 #define STORAGE_TIKV_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE-TiKV]"
-
-TiKVStorage::TiKVStorage(const std::shared_ptr<pingcap::kv::Cluster>& _cluster)
-  : m_cluster(_cluster)
+namespace bcos::storage
 {
-    m_snapshot = std::make_shared<Snapshot>(m_cluster.get());
+std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(
+    const std::vector<std::string>& pdAddrs)
+{
+    pingcap::ClusterConfig config;
+    // TODO: why config this?
+    config.tiflash_engine_key = "engine";
+    config.tiflash_engine_value = "tiflash";
+    return std::make_shared<Cluster>(pdAddrs, config);
 }
+}  // namespace bcos::storage
 
 void TiKVStorage::asyncGetPrimaryKeys(const std::string_view& _table,
     const std::optional<Condition const>& _condition,
@@ -52,8 +59,8 @@ void TiKVStorage::asyncGetPrimaryKeys(const std::string_view& _table,
 
     std::string keyPrefix;
     keyPrefix = string(_table) + TABLE_KEY_SPLIT;
-
-    auto scanner = m_snapshot->Scan(keyPrefix, string());
+    auto snap = Snapshot(m_cluster.get());
+    auto scanner = snap.Scan(keyPrefix, string());
 
     // FIXME: check performance and add limit of primary keys
     for (; scanner.valid && scanner.key().rfind(keyPrefix, 0) == 0; scanner.next())
@@ -64,6 +71,8 @@ void TiKVStorage::asyncGetPrimaryKeys(const std::string_view& _table,
         }
         size_t start = keyPrefix.size();
         auto key = scanner.key().substr(start);
+        STORAGE_TIKV_LOG(TRACE) << LOG_DESC("asyncGetPrimaryKeys") << LOG_KV("table", _table)
+                                << LOG_KV("key", key);
         if (!_condition || _condition->isValid(key))
         {  // filter by condition, remove keyPrefix
             result.push_back(std::move(key));
@@ -76,15 +85,16 @@ void TiKVStorage::asyncGetPrimaryKeys(const std::string_view& _table,
 void TiKVStorage::asyncGetRow(const std::string_view& _table, const std::string_view& _key,
     std::function<void(Error::UniquePtr&&, std::optional<Entry>&&)> _callback) noexcept
 {
-    STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
-                               << LOG_KV("key", _key);
     try
     {
         auto dbKey = toDBKey(_table, _key);
-        auto value = m_snapshot->Get(dbKey);
+        auto snap = Snapshot(m_cluster.get());
+        auto value = snap.Get(dbKey);
         if (value.empty())
         {
-            _callback(nullptr, std::optional<Entry>());
+            STORAGE_TIKV_LOG(TRACE) << LOG_DESC("asyncGetRow empty") << LOG_KV("table", _table)
+                                    << LOG_KV("key", _key) << LOG_KV("dbKey", dbKey);
+            _callback(nullptr, {});
             return;
         }
         TableInfo::ConstPtr tableInfo = getTableInfo(_table);
@@ -92,14 +102,16 @@ void TiKVStorage::asyncGetRow(const std::string_view& _table, const std::string_
         {
             _callback(BCOS_ERROR_UNIQUE_PTR(
                           TableNotExists, "asyncGetRow failed because can't get TableInfo!"),
-                std::optional<Entry>());
+                {});
+            return;
         }
+        STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
+                                << LOG_KV("key", _key);
         _callback(nullptr, decodeEntry(tableInfo, value));
     }
     catch (const std::exception& e)
     {
-        _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "asyncGetRow failed!", e),
-            std::optional<Entry>());
+        _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "asyncGetRow failed!", e), {});
     }
 }
 
@@ -108,8 +120,6 @@ void TiKVStorage::asyncGetRows(const std::string_view& _table,
         _keys,
     std::function<void(Error::UniquePtr&&, std::vector<std::optional<Entry>>&&)> _callback) noexcept
 {
-    STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncGetRows") << LOG_KV("table", _table);
-
     try
     {
         std::visit(
@@ -118,9 +128,13 @@ void TiKVStorage::asyncGetRows(const std::string_view& _table,
                 TableInfo::ConstPtr tableInfo = getTableInfo(_table);
                 if (!tableInfo)
                 {
+                    STORAGE_TIKV_LOG(DEBUG)
+                        << LOG_DESC("asyncGetRows failed table doesn't exist")
+                        << LOG_KV("table", _table) << LOG_KV("count", keys.size());
                     _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists,
                                   "asyncGetRows failed because can't get TableInfo!"),
                         std::vector<std::optional<Entry>>());
+                    return;
                 }
 
                 std::vector<std::string> realKeys(keys.size());
@@ -131,7 +145,8 @@ void TiKVStorage::asyncGetRows(const std::string_view& _table,
                             realKeys[i] = toDBKey(_table, keys[i]);
                         }
                     });
-                auto result = m_snapshot->BatchGet(realKeys);
+                auto snap = Snapshot(m_cluster.get());
+                auto result = snap.BatchGet(realKeys);
 
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
                     [&](const tbb::blocked_range<size_t>& range) {
@@ -145,18 +160,8 @@ void TiKVStorage::asyncGetRows(const std::string_view& _table,
                         }
                     });
 
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
-                    [&](const tbb::blocked_range<size_t>& range) {
-                        for (size_t i = range.begin(); i != range.end(); ++i)
-                        {
-                            auto dbKey = toDBKey(_table, keys[i]);
-                            auto value = m_snapshot->Get(dbKey);
-                            if (!value.empty())
-                            {
-                                entries[i] = decodeEntry(tableInfo, value);
-                            }
-                        }
-                    });
+                STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncGetRows") << LOG_KV("table", _table)
+                                        << LOG_KV("count", entries.size());
 
                 _callback(nullptr, std::move(entries));
             },
@@ -164,6 +169,8 @@ void TiKVStorage::asyncGetRows(const std::string_view& _table,
     }
     catch (const std::exception& e)
     {
+        STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncGetRows failed") << LOG_KV("table", _table)
+                                << LOG_KV("message", e.what());
         _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "asyncGetRows failed! ", e),
             std::vector<std::optional<Entry>>());
     }
@@ -172,19 +179,21 @@ void TiKVStorage::asyncGetRows(const std::string_view& _table,
 void TiKVStorage::asyncSetRow(const std::string_view& _table, const std::string_view& _key,
     Entry _entry, std::function<void(Error::UniquePtr&&)> _callback) noexcept
 {
-        STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncSetRow") << LOG_KV("table", _table)
-                              << LOG_KV("key", _key);
     try
     {
         auto dbKey = toDBKey(_table, _key);
         Txn txn(m_cluster.get());
 
         if (_entry.status() == Entry::DELETED)
-        {  // TODO: check delete
+        {
+            STORAGE_TIKV_LOG(DEBUG)
+                << LOG_DESC("asyncSetRow delete") << LOG_KV("table", _table) << LOG_KV("key", _key);
             txn.set(dbKey, "");
         }
         else
         {
+            STORAGE_TIKV_LOG(DEBUG)
+                << LOG_DESC("asyncSetRow") << LOG_KV("table", _table) << LOG_KV("key", _key);
             std::string value = encodeEntry(_entry);
             txn.set(dbKey, value);
         }
@@ -201,8 +210,8 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& param,
     const TraverseStorageInterface::ConstPtr& storage,
     std::function<void(Error::Ptr&&, uint64_t startTS)> callback) noexcept
 {
-        STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number)
-                              << LOG_KV("startTS", param.startTS);
+    STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number)
+                           << LOG_KV("startTS", param.startTS);
     try
     {
         std::unordered_map<std::string, std::string> mutations;
@@ -225,6 +234,11 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& param,
                 }
                 return true;
             });
+        if (mutations.empty() && param.startTS == 0)
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(EmptyStorage, "commit storage is empty"), 0);
+            return;
+        }
         auto size = mutations.size();
         auto primaryLock = toDBKey(param.primaryTableName, param.primaryTableKey);
         m_committer = std::make_shared<BCOSTwoPhaseCommitter>(
@@ -256,24 +270,28 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& param,
 void TiKVStorage::asyncCommit(
     const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept
 {
-        STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncCommit") << LOG_KV("number", params.number)
-                              << LOG_KV("startTS", params.startTS);
+    STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncCommit") << LOG_KV("number", params.number)
+                           << LOG_KV("startTS", params.startTS);
     std::ignore = params;
     if (m_committer)
     {
         m_committer->commitKeys();
+        m_committer = nullptr;
     }
-    m_snapshot = std::make_shared<Snapshot>(m_cluster.get());
     callback(nullptr);
 }
 
 void TiKVStorage::asyncRollback(
     const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept
 {
-        STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("number", params.number)
-                              << LOG_KV("startTS", params.startTS);
+    STORAGE_TIKV_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("number", params.number)
+                           << LOG_KV("startTS", params.startTS);
     std::ignore = params;
-    m_committer->rollback();
-    m_committer = nullptr;
+    if (m_committer)
+    {
+        m_committer->rollback();
+        m_committer = nullptr;
+    }
+
     callback(nullptr);
 }
