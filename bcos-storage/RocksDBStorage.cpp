@@ -46,6 +46,7 @@ void RocksDBStorage::asyncGetPrimaryKeys(const std::string_view& _table,
     const std::optional<Condition const>& _condition,
     std::function<void(Error::UniquePtr&&, std::vector<std::string>&&)> _callback) noexcept
 {
+    auto start = utcTime();
     std::vector<std::string> result;
 
     std::string keyPrefix;
@@ -67,17 +68,20 @@ void RocksDBStorage::asyncGetPrimaryKeys(const std::string_view& _table,
         }
     }
     delete iter;
-
+    auto end = utcTime();
     _callback(nullptr, std::move(result));
+    STORAGE_ROCKSDB_LOG(DEBUG) << LOG_DESC("asyncGetPrimaryKeys") << LOG_KV("table", _table)
+                               << LOG_KV("count", result.size())
+                               << LOG_KV("read time(ms)", end - start)
+                               << LOG_KV("callback time(ms)", utcTime() - end);
 }
 
 void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::string_view& _key,
     std::function<void(Error::UniquePtr&&, std::optional<Entry>&&)> _callback) noexcept
 {
-    STORAGE_ROCKSDB_LOG(DEBUG) << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
-                               << LOG_KV("key", _key);
     try
     {
+        auto start = utcTime();
         PinnableSlice value;
         auto dbKey = toDBKey(_table, _key);
 
@@ -102,15 +106,23 @@ void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::stri
 
             return;
         }
+        auto end = utcTime();
         TableInfo::ConstPtr tableInfo = getTableInfo(_table);
         if (!tableInfo)
         {
+            STORAGE_ROCKSDB_LOG(ERROR) << LOG_DESC("asyncGetRow can't get tableInfo")
+                                       << LOG_KV("table", _table) << LOG_KV("key", _key);
             _callback(BCOS_ERROR_UNIQUE_PTR(
                           TableNotExists, "asyncGetRow failed because can't get TableInfo!"),
                 {});
             return;
         }
+        auto end2 = utcTime();
         _callback(nullptr, decodeEntry(tableInfo, value.ToStringView()));
+        STORAGE_ROCKSDB_LOG(DEBUG)
+            << LOG_DESC("asyncGetRow") << LOG_KV("table", _table) << LOG_KV("key", _key)
+            << LOG_KV("read time(ms)", end - start) << LOG_KV("tableInfo time(ms)", end2 - end)
+            << LOG_KV("callback time(ms)", utcTime() - end2);
     }
     catch (const std::exception& e)
     {
@@ -123,11 +135,23 @@ void RocksDBStorage::asyncGetRows(const std::string_view& _table,
         _keys,
     std::function<void(Error::UniquePtr&&, std::vector<std::optional<Entry>>&&)> _callback) noexcept
 {
-    STORAGE_ROCKSDB_LOG(DEBUG) << LOG_DESC("asyncGetRows") << LOG_KV("table", _table);
     try
     {
+        auto start = utcTime();
         std::visit(
             [&](auto const& keys) {
+                std::vector<std::optional<Entry>> entries(keys.size());
+                TableInfo::ConstPtr tableInfo = getTableInfo(_table);
+                if (!tableInfo)
+                {
+                    STORAGE_ROCKSDB_LOG(ERROR)
+                        << LOG_DESC("asyncGetRows can't get tableInfo") << LOG_KV("table", _table);
+                    _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists,
+                                  "asyncGetRows failed because can't get TableInfo!"),
+                        std::vector<std::optional<Entry>>());
+                    return;
+                }
+
                 std::vector<std::string> dbKeys(keys.size());
                 std::vector<Slice> slices(keys.size());
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
@@ -143,16 +167,7 @@ void RocksDBStorage::asyncGetRows(const std::string_view& _table,
                 std::vector<Status> statusList(keys.size());
                 m_db->MultiGet(ReadOptions(), m_db->DefaultColumnFamily(), slices.size(),
                     slices.data(), values.data(), statusList.data());
-
-                std::vector<std::optional<Entry>> entries(keys.size());
-                TableInfo::ConstPtr tableInfo = getTableInfo(_table);
-                if (!tableInfo)
-                {
-                    _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists,
-                                  "asyncGetRows failed because can't get TableInfo!"),
-                        std::vector<std::optional<Entry>>());
-                    return;
-                }
+                auto end = utcTime();
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
                     [&](const tbb::blocked_range<size_t>& range) {
                         for (size_t i = range.begin(); i != range.end(); ++i)
@@ -183,7 +198,13 @@ void RocksDBStorage::asyncGetRows(const std::string_view& _table,
                             }
                         }
                     });
+                auto decode = utcTime();
                 _callback(nullptr, std::move(entries));
+                STORAGE_ROCKSDB_LOG(DEBUG)
+                    << LOG_DESC("asyncGetRows") << LOG_KV("table", _table)
+                    << LOG_KV("count", entries.size()) << LOG_KV("read time(ms)", end - start)
+                    << LOG_KV("decode time(ms)", decode - end)
+                    << LOG_KV("callback time(ms)", utcTime() - decode);
             },
             _keys);
     }
@@ -239,11 +260,10 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param,
     const TraverseStorageInterface::ConstPtr& storage,
     std::function<void(Error::Ptr&&, uint64_t startTS)> callback) noexcept
 {
-    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number)
-                              << LOG_KV("startTS", param.startTS);
     std::ignore = param;
     try
     {
+        auto start = utcTime();
         {
             tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
             if (!m_writeBatch)
@@ -268,7 +288,12 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param,
                 }
                 return true;
             });
+        auto end = utcTime();
         callback(nullptr, 0);
+        STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number)
+                                  << LOG_KV("startTS", param.startTS)
+                                  << LOG_KV("time(ms)", end - start)
+                                  << LOG_KV("callback time(ms)", utcTime() - end);
     }
     catch (const std::exception& e)
     {
@@ -279,8 +304,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param,
 void RocksDBStorage::asyncCommit(
     const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept
 {
-    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncCommit") << LOG_KV("number", params.number)
-                              << LOG_KV("startTS", params.startTS);
+    auto start = utcTime();
     std::ignore = params;
     {
         tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
@@ -290,18 +314,28 @@ void RocksDBStorage::asyncCommit(
             m_writeBatch = nullptr;
         }
     }
+    auto end = utcTime();
     callback(nullptr);
+    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncCommit") << LOG_KV("number", params.number)
+                              << LOG_KV("startTS", params.startTS)
+                              << LOG_KV("time(ms)", utcTime() - start)
+                              << LOG_KV("callback time(ms)", utcTime() - end);
 }
 
 void RocksDBStorage::asyncRollback(
     const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept
 {
-    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("number", params.number)
-                              << LOG_KV("startTS", params.startTS);
+    auto start = utcTime();
+
     std::ignore = params;
     {
         tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
         m_writeBatch = nullptr;
     }
+    auto end = utcTime();
     callback(nullptr);
+    STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncRollback") << LOG_KV("number", params.number)
+                              << LOG_KV("startTS", params.startTS)
+                              << LOG_KV("time(ms)", utcTime() - start)
+                              << LOG_KV("callback time(ms)", utcTime() - end);
 }

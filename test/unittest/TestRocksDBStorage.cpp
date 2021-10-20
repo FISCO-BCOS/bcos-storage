@@ -27,6 +27,19 @@ using namespace std;
 
 namespace bcos::test
 {
+class Header256Hash : public bcos::crypto::Hash
+{
+public:
+    typedef std::shared_ptr<Header256Hash> Ptr;
+    Header256Hash() = default;
+    virtual ~Header256Hash(){};
+    bcos::crypto::HashType hash(bytesConstRef _data) override
+    {
+        std::hash<std::string_view> hash;
+        return bcos::crypto::HashType(
+            hash(std::string_view((const char*)_data.data(), _data.size())));
+    }
+};
 struct TestRocksDBStorageFixture
 {
     TestRocksDBStorageFixture()
@@ -34,8 +47,10 @@ struct TestRocksDBStorageFixture
         rocksdb::DB* db;
         rocksdb::Options options;
         // Optimize RocksDB. This is the easiest way to get RocksDB to perform well
-        options.IncreaseParallelism();
-        options.OptimizeLevelStyleCompaction();
+
+        // options.IncreaseParallelism();
+        // options.OptimizeLevelStyleCompaction();
+
         // create the DB if it's not already present
         options.create_if_missing = true;
 
@@ -89,6 +104,89 @@ struct TestRocksDBStorageFixture
             rocksDBStorage->asyncSetRow(testTableName, key, entry,
                 [](Error::UniquePtr&& error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
         }
+    }
+
+    void writeReadDeleteSingleTable(size_t count)
+    {
+        auto storage = rocksDBStorage;
+        size_t tableEntries = count;
+        auto hashImpl = std::make_shared<Header256Hash>();
+        auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
+        auto testTable = stateStorage->openTable(testTableName);
+        BOOST_CHECK_EQUAL(testTable.has_value(), true);
+        for (size_t i = 0; i < tableEntries; ++i)
+        {
+            std::string key = "key" + boost::lexical_cast<std::string>(i);
+            Entry entry(testTableInfo);
+            entry.importFields({"value_" + boost::lexical_cast<std::string>(i), "value1", "value2",
+                "value3", "value4", "value5"});
+            testTable->setRow(key, std::move(entry));
+        }
+
+        auto params1 = bcos::storage::TransactionalStorageInterface::TwoPCParams();
+        params1.number = 100;
+        params1.primaryTableName = testTableName;
+        params1.primaryTableKey = "key0";
+        auto start = std::chrono::system_clock::now();
+        // prewrite
+        storage->asyncPrepare(params1, stateStorage, [&](Error::Ptr&& error, uint64_t ts) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
+            BOOST_CHECK_EQUAL(ts, 0);
+            params1.startTS = ts;
+        });
+
+        // commit
+        storage->asyncCommit(bcos::storage::TransactionalStorageInterface::TwoPCParams(),
+            [&](Error::Ptr&& error) { BOOST_CHECK_EQUAL(error, nullptr); });
+        auto commitEnd = std::chrono::system_clock::now();
+        // check commit success
+        storage->asyncGetPrimaryKeys(testTableName, std::optional<storage::Condition const>(),
+            [&](Error::UniquePtr&& error, std::vector<std::string>&& keys) {
+                BOOST_CHECK_EQUAL(error.get(), nullptr);
+                BOOST_CHECK_EQUAL(keys.size(), tableEntries);
+                storage->asyncGetRows(testTableName, keys,
+                    [&](Error::UniquePtr&& error, std::vector<std::optional<Entry>>&& entries) {
+                        BOOST_CHECK_EQUAL(error.get(), nullptr);
+                        BOOST_CHECK_EQUAL(entries.size(), tableEntries);
+                        for (size_t i = 0; i < tableEntries; ++i)
+                        {
+                            BOOST_CHECK_EQUAL(entries[i]->getField("v4"), std::string("value3"));
+                        }
+                    });
+            });
+        auto getEnd = std::chrono::system_clock::now();
+
+        for (size_t i = 0; i < tableEntries; ++i)
+        {
+            auto entry = testTable->newEntry();
+            auto key = "key" + boost::lexical_cast<std::string>(i);
+            entry.setStatus(Entry::DELETED);
+            testTable->setRow(key, std::move(entry));
+        }
+        params1.startTS = 0;
+        storage->asyncPrepare(params1, stateStorage, [&](Error::Ptr&& error, uint64_t ts) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
+            BOOST_CHECK_EQUAL(ts, 0);
+            params1.startTS = ts;
+        });
+        // commit
+        storage->asyncCommit(bcos::storage::TransactionalStorageInterface::TwoPCParams(),
+            [&](Error::Ptr&& error) { BOOST_CHECK_EQUAL(error, nullptr); });
+        auto deleteEnd = std::chrono::system_clock::now();
+        // check if the data is deleted
+        storage->asyncGetPrimaryKeys(testTableName, std::optional<storage::Condition const>(),
+            [](Error::UniquePtr&& error, std::vector<std::string>&& keys) {
+                BOOST_CHECK_EQUAL(error.get(), nullptr);
+                BOOST_CHECK_EQUAL(keys.size(), 0);
+            });
+        cerr << "entries count=" << tableEntries << "|>>>>>>>>> commit="
+             << std::chrono::duration_cast<chrono::milliseconds>(commitEnd - start).count()
+             << "ms|getAll="
+             << std::chrono::duration_cast<chrono::milliseconds>(getEnd - commitEnd).count()
+             << "ms|deleteAll="
+             << std::chrono::duration_cast<chrono::milliseconds>(deleteEnd - getEnd).count() << "ms"
+             << endl
+             << endl;
     }
 
     ~TestRocksDBStorageFixture()
@@ -308,20 +406,6 @@ BOOST_AUTO_TEST_CASE(asyncGetRows)
     cleanupTestTableData();
 }
 
-class Header256Hash : public bcos::crypto::Hash
-{
-public:
-    typedef std::shared_ptr<Header256Hash> Ptr;
-    Header256Hash() = default;
-    virtual ~Header256Hash(){};
-    bcos::crypto::HashType hash(bytesConstRef _data) override
-    {
-        std::hash<std::string_view> hash;
-        return bcos::crypto::HashType(
-            hash(std::string_view((const char*)_data.data(), _data.size())));
-    }
-};
-
 BOOST_AUTO_TEST_CASE(asyncPrepare)
 {
     prepareTestTableData();
@@ -495,6 +579,15 @@ BOOST_AUTO_TEST_CASE(rocksDBiter)
     {
         boost::filesystem::remove_all(testPath);
     }
+}
+
+BOOST_AUTO_TEST_CASE(writeReadDelete_1Table)
+{
+    writeReadDeleteSingleTable(1000);
+    writeReadDeleteSingleTable(5000);
+    writeReadDeleteSingleTable(10000);
+    writeReadDeleteSingleTable(20000);
+    writeReadDeleteSingleTable(50000);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
