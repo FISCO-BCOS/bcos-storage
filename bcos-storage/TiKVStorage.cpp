@@ -51,7 +51,7 @@ std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(const std::vector<std::stri
 
 void TiKVStorage::asyncGetPrimaryKeys(const std::string_view& _table,
     const std::optional<Condition const>& _condition,
-    std::function<void(Error::UniquePtr&&, std::vector<std::string>&&)> _callback) noexcept
+    std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) noexcept
 {
     auto start = utcTime();
     std::vector<std::string> result;
@@ -84,7 +84,7 @@ void TiKVStorage::asyncGetPrimaryKeys(const std::string_view& _table,
 }
 
 void TiKVStorage::asyncGetRow(const std::string_view& _table, const std::string_view& _key,
-    std::function<void(Error::UniquePtr&&, std::optional<Entry>&&)> _callback) noexcept
+    std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) noexcept
 {
     try
     {
@@ -126,7 +126,7 @@ void TiKVStorage::asyncGetRow(const std::string_view& _table, const std::string_
 void TiKVStorage::asyncGetRows(const std::string_view& _table,
     const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
         _keys,
-    std::function<void(Error::UniquePtr&&, std::vector<std::optional<Entry>>&&)> _callback) noexcept
+    std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) noexcept
 {
     try
     {
@@ -189,7 +189,7 @@ void TiKVStorage::asyncGetRows(const std::string_view& _table,
 }
 
 void TiKVStorage::asyncSetRow(const std::string_view& _table, const std::string_view& _key,
-    Entry _entry, std::function<void(Error::UniquePtr&&)> _callback) noexcept
+    Entry _entry, std::function<void(Error::UniquePtr)> _callback) noexcept
 {
     try
     {
@@ -220,7 +220,7 @@ void TiKVStorage::asyncSetRow(const std::string_view& _table, const std::string_
 
 void TiKVStorage::asyncPrepare(const TwoPCParams& param,
     const TraverseStorageInterface::ConstPtr& storage,
-    std::function<void(Error::Ptr&&, uint64_t startTS)> callback) noexcept
+    std::function<void(Error::Ptr, uint64_t startTS)> callback) noexcept
 {
     try
     {
@@ -289,7 +289,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& param,
 }
 
 void TiKVStorage::asyncCommit(
-    const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept
+    const TwoPCParams& params, std::function<void(Error::Ptr)> callback) noexcept
 {
     auto start = utcTime();
     std::ignore = params;
@@ -306,7 +306,7 @@ void TiKVStorage::asyncCommit(
 }
 
 void TiKVStorage::asyncRollback(
-    const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept
+    const TwoPCParams& params, std::function<void(Error::Ptr)> callback) noexcept
 {
     auto start = utcTime();
     std::ignore = params;

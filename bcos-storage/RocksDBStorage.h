@@ -43,30 +43,30 @@ public:
 
     void asyncGetPrimaryKeys(const std::string_view& _table,
         const std::optional<Condition const>& _condition,
-        std::function<void(Error::UniquePtr&&, std::vector<std::string>&&)> _callback) noexcept
+        std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) noexcept
         override;
 
     void asyncGetRow(const std::string_view& table, const std::string_view& _key,
-        std::function<void(Error::UniquePtr&&, std::optional<Entry>&&)> _callback) noexcept
+        std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) noexcept
         override;
 
     void asyncGetRows(const std::string_view& table,
         const std::variant<const gsl::span<std::string_view const>,
             const gsl::span<std::string const>>& _keys,
-        std::function<void(Error::UniquePtr&&, std::vector<std::optional<Entry>>&&)>
+        std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)>
             _callback) noexcept override;
 
     void asyncSetRow(const std::string_view& table, const std::string_view& key, Entry entry,
-        std::function<void(Error::UniquePtr&&)> callback) noexcept override;
+        std::function<void(Error::UniquePtr)> callback) noexcept override;
 
     void asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface::ConstPtr& storage,
-        std::function<void(Error::Ptr&&, uint64_t)> callback) noexcept override;
+        std::function<void(Error::Ptr, uint64_t)> callback) noexcept override;
 
     void asyncCommit(
-        const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept override;
+        const TwoPCParams& params, std::function<void(Error::Ptr)> callback) noexcept override;
 
     void asyncRollback(
-        const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept override;
+        const TwoPCParams& params, std::function<void(Error::Ptr)> callback) noexcept override;
 
 private:
 
