@@ -44,7 +44,7 @@ RocksDBStorage::RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db) : m_db(std::mo
 
 void RocksDBStorage::asyncGetPrimaryKeys(const std::string_view& _table,
     const std::optional<Condition const>& _condition,
-    std::function<void(Error::UniquePtr&&, std::vector<std::string>&&)> _callback) noexcept
+    std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) noexcept
 {
     auto start = utcTime();
     std::vector<std::string> result;
@@ -77,7 +77,7 @@ void RocksDBStorage::asyncGetPrimaryKeys(const std::string_view& _table,
 }
 
 void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::string_view& _key,
-    std::function<void(Error::UniquePtr&&, std::optional<Entry>&&)> _callback) noexcept
+    std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) noexcept
 {
     try
     {
@@ -133,7 +133,7 @@ void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::stri
 void RocksDBStorage::asyncGetRows(const std::string_view& _table,
     const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
         _keys,
-    std::function<void(Error::UniquePtr&&, std::vector<std::optional<Entry>>&&)> _callback) noexcept
+    std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) noexcept
 {
     try
     {
@@ -216,7 +216,7 @@ void RocksDBStorage::asyncGetRows(const std::string_view& _table,
 }
 
 void RocksDBStorage::asyncSetRow(const std::string_view& _table, const std::string_view& _key,
-    Entry _entry, std::function<void(Error::UniquePtr&&)> _callback) noexcept
+    Entry _entry, std::function<void(Error::UniquePtr)> _callback) noexcept
 {
     try
     {
@@ -258,7 +258,7 @@ void RocksDBStorage::asyncSetRow(const std::string_view& _table, const std::stri
 
 void RocksDBStorage::asyncPrepare(const TwoPCParams& param,
     const TraverseStorageInterface::ConstPtr& storage,
-    std::function<void(Error::Ptr&&, uint64_t startTS)> callback) noexcept
+    std::function<void(Error::Ptr, uint64_t startTS)> callback) noexcept
 {
     std::ignore = param;
     try
@@ -302,7 +302,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param,
 }
 
 void RocksDBStorage::asyncCommit(
-    const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept
+    const TwoPCParams& params, std::function<void(Error::Ptr)> callback) noexcept
 {
     auto start = utcTime();
     std::ignore = params;
@@ -323,7 +323,7 @@ void RocksDBStorage::asyncCommit(
 }
 
 void RocksDBStorage::asyncRollback(
-    const TwoPCParams& params, std::function<void(Error::Ptr&&)> callback) noexcept
+    const TwoPCParams& params, std::function<void(Error::Ptr)> callback) noexcept
 {
     auto start = utcTime();
 
