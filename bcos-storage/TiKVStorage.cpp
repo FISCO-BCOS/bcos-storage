@@ -64,10 +64,6 @@ void TiKVStorage::asyncGetPrimaryKeys(const std::string_view& _table,
     // FIXME: check performance and add limit of primary keys
     for (; scanner.valid && scanner.key().rfind(keyPrefix, 0) == 0; scanner.next())
     {
-        if (scanner.value().empty())
-        {
-            continue;
-        }
         size_t start = keyPrefix.size();
         auto key = scanner.key().substr(start);
         if (!_condition || _condition->isValid(key))
