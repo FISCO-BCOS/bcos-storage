@@ -200,8 +200,8 @@ BOOST_AUTO_TEST_CASE(asyncGetRow)
             for (size_t i = range.begin(); i != range.end(); ++i)
             {
                 std::string key = "key" + boost::lexical_cast<std::string>(i);
-                storage->asyncGetRow(testTableName, key,
-                    [&](Error::UniquePtr error, std::optional<Entry> entry) {
+                storage->asyncGetRow(
+                    testTableName, key, [&](Error::UniquePtr error, std::optional<Entry> entry) {
                         BOOST_CHECK_EQUAL(error.get(), nullptr);
                         if (i < total)
                         {
@@ -282,8 +282,8 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
     // query old data
     auto condition = std::optional<Condition const>();
     BOOST_CHECK_EQUAL(condition.has_value(), false);
-    storage->asyncGetPrimaryKeys(tableInfo->name(), condition,
-        [](Error::UniquePtr error, std::vector<std::string> keys) {
+    storage->asyncGetPrimaryKeys(
+        tableInfo->name(), condition, [](Error::UniquePtr error, std::vector<std::string> keys) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(keys.size(), total);
 
@@ -660,6 +660,139 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
         });
 
     cleanupTestTableData();
+}
+
+BOOST_AUTO_TEST_CASE(singleStorageRollback)
+{
+    size_t tableEntries = 101;
+    auto table1Name = "table1";
+    storage->asyncGetPrimaryKeys(table1Name, std::optional<storage::Condition const>(),
+        [&](Error::UniquePtr error, std::vector<std::string> keys) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
+            BOOST_CHECK_EQUAL(keys.size(), 0);
+        });
+    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
+    BOOST_CHECK_EQUAL(
+        stateStorage->createTable(table1Name, "value1,value2,value3").has_value(), true);
+    auto table1 = stateStorage->openTable(table1Name);
+    BOOST_CHECK_EQUAL(table1.has_value(), true);
+    for (size_t i = 0; i < tableEntries; ++i)
+    {
+        auto entry = table1->newEntry();
+        auto key1 = "key" + boost::lexical_cast<std::string>(i);
+        entry.setField("value1", "hello world!" + boost::lexical_cast<std::string>(i));
+        table1->setRow(key1, entry);
+    }
+    auto params1 = bcos::storage::TransactionalStorageInterface::TwoPCParams();
+    params1.number = 100;
+    params1.primaryTableName = table1Name;
+    params1.primaryTableKey = "key0";
+    storage->asyncPrepare(params1, stateStorage, [&](Error::Ptr error, uint64_t ts) {
+        BOOST_CHECK_EQUAL(error.get(), nullptr);
+        BOOST_CHECK_NE(ts, 0);
+    });
+    storage->asyncRollback(
+        params1, [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
+    storage->asyncGetPrimaryKeys(table1Name, std::optional<storage::Condition const>(),
+        [&](Error::UniquePtr error, std::vector<std::string> keys) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
+            BOOST_CHECK_EQUAL(keys.size(), 0);
+        });
+}
+
+BOOST_AUTO_TEST_CASE(multiStorageRollback)
+{
+    size_t tableEntries = 101;
+    auto storage2 = std::make_shared<TiKVStorage>(m_cluster);
+    auto storage3 = std::make_shared<TiKVStorage>(m_cluster);
+    auto hashImpl = std::make_shared<Header256Hash>();
+    auto stateStorage = std::make_shared<bcos::storage::StateStorage>(storage);
+    auto testTable = stateStorage->openTable(testTableName);
+    BOOST_CHECK_EQUAL(testTable.has_value(), true);
+    for (size_t i = 0; i < total; ++i)
+    {
+        std::string key = "key" + boost::lexical_cast<std::string>(i);
+        Entry entry(testTableInfo);
+        entry.importFields({"value_" + boost::lexical_cast<std::string>(i), "value1", "value2",
+            "value3", "value4", "value5"});
+        testTable->setRow(key, std::move(entry));
+    }
+    auto stateStorage2 = std::make_shared<bcos::storage::StateStorage>(storage2);
+    auto stateStorage3 = std::make_shared<bcos::storage::StateStorage>(storage3);
+    auto table1Name = "table1";
+    auto table2Name = "table2";
+    BOOST_CHECK_EQUAL(
+        stateStorage2->createTable(table1Name, "value1,value2,value3").has_value(), true);
+    BOOST_CHECK_EQUAL(
+        stateStorage3->createTable(table2Name, "value1,value2,value3,value4,value5").has_value(),
+        true);
+    auto table1 = stateStorage2->openTable(table1Name);
+    auto table2 = stateStorage3->openTable(table2Name);
+
+    BOOST_CHECK_EQUAL(table1.has_value(), true);
+    BOOST_CHECK_EQUAL(table2.has_value(), true);
+
+    std::vector<std::string> table1Keys;
+    std::vector<std::string> table2Keys;
+
+    for (size_t i = 0; i < tableEntries; ++i)
+    {
+        auto entry = table1->newEntry();
+        auto key1 = "key" + boost::lexical_cast<std::string>(i);
+        entry.setField("value1", "hello world!" + boost::lexical_cast<std::string>(i));
+        table1->setRow(key1, entry);
+        table1Keys.push_back(key1);
+
+        auto entry2 = table2->newEntry();
+        auto key2 = "key" + boost::lexical_cast<std::string>(i);
+        entry2.setField("value3", "hello world!" + boost::lexical_cast<std::string>(i));
+        table2->setRow(key2, entry2);
+        table2Keys.push_back(key2);
+    }
+    auto params1 = bcos::storage::TransactionalStorageInterface::TwoPCParams();
+    params1.number = 100;
+    params1.primaryTableName = testTableName;
+    params1.primaryTableKey = "key0";
+    auto stateStorage0 = std::make_shared<bcos::storage::StateStorage>(storage);
+    // check empty storage error
+    storage->asyncPrepare(params1, stateStorage0, [&](Error::Ptr error, uint64_t ts) {
+        BOOST_CHECK_NE(error.get(), nullptr);
+        BOOST_CHECK_EQUAL(ts, 0);
+    });
+    // prewrite
+    storage->asyncPrepare(params1, stateStorage, [&](Error::Ptr error, uint64_t ts) {
+        BOOST_CHECK_EQUAL(error.get(), nullptr);
+        BOOST_CHECK_NE(ts, 0);
+        params1.startTS = ts;
+        storage2->asyncPrepare(params1, stateStorage2, [&](Error::Ptr error, uint64_t ts) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
+            BOOST_CHECK_EQUAL(ts, 0);
+        });
+    });
+    // all storage call asyncRollback
+    storage->asyncRollback(
+        params1, [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
+    storage2->asyncRollback(
+        params1, [&](Error::Ptr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
+
+    // std::this_thread::sleep_for(chrono::seconds(20));
+
+    // check commit failed
+    storage->asyncGetPrimaryKeys(table1Name, std::optional<storage::Condition const>(),
+        [&](Error::UniquePtr error, std::vector<std::string> keys) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
+            BOOST_CHECK_EQUAL(keys.size(), 0);
+        });
+    storage->asyncGetPrimaryKeys(table2Name, std::optional<storage::Condition const>(),
+        [](Error::UniquePtr error, std::vector<std::string> keys) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
+            BOOST_CHECK_EQUAL(keys.size(), 0);
+        });
+    storage->asyncGetPrimaryKeys(testTableName, std::optional<storage::Condition const>(),
+        [](Error::UniquePtr error, std::vector<std::string> keys) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
+            BOOST_CHECK_EQUAL(keys.size(), 0);
+        });
 }
 
 BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)

@@ -35,11 +35,11 @@ jobs:
             /home/runner/.hunter
             /Users/runner/.hunter/
             ccache
-          key: hunter-clang-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: hunter-clang-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            hunter-clang-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-clang-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-clang-v1-notest-${{ runner.temp }}-
+            hunter-clang-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-clang-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-clang-v2-notest-${{ runner.temp }}-
       - name: install macOS dependencies
         if: runner.os == 'macOS'
         run: brew install ccache
@@ -87,11 +87,11 @@ jobs:
           path: |
             /home/runner/.hunter
             ccache
-          key: hunter-gcc-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: hunter-gcc-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            hunter-gcc-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-gcc-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-gcc-v1-notest-${{ runner.temp }}-
+            hunter-gcc-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-gcc-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-gcc-v2-notest-${{ runner.temp }}-
       - name: install Ubuntu dependencies
         run: sudo apt install -y git curl build-essential cmake ccache libzstd-dev autoconf libtool pkg-config
       - name: prepare TiKV
@@ -125,11 +125,11 @@ jobs:
           path: |
             /home/runner/.hunter
             ccache
-          key: hunter-ubuntu-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: hunter-ubuntu-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            hunter-ubuntu-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-ubuntu-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-ubuntu-v1-notest-${{ runner.temp }}-
+            hunter-ubuntu-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-ubuntu-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-ubuntu-v2-notest-${{ runner.temp }}-
       - name: install Ubuntu dependencies
         run: sudo apt install -y git curl build-essential cmake ccache lcov libzstd-dev autoconf libtool pkg-config
       - name: prepare TiKV
@@ -176,15 +176,15 @@ jobs:
             /home/runner/.hunter
             /github/home/.hunter
             ccache
-          key: hunter-centos-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: hunter-centos-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            hunter-centos-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-centos-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-centos-v2-notest-${{ runner.temp }}-
+            hunter-centos-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-centos-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-centos-v3-notest-${{ runner.temp }}-
       - name: install CentOS dependencies
         run: |
           yum install -y epel-release centos-release-scl
-          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache devtoolset-7 libzstd-devel && source /opt/rh/devtoolset-7/enable
+          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache devtoolset-7 libzstd-devel python-devel python3-devel && source /opt/rh/devtoolset-7/enable
       # - name: prepare TiKV
       #   run: |
       #     mkdir -p /root/.tiup/bin/

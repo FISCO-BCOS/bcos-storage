@@ -17,10 +17,10 @@ find_package (Poco REQUIRED Foundation Net JSON Util)
 
 set(ENV{PATH} ${GRPC_ROOT}/bin:$ENV{PATH})
 FetchContent_Declare(tikv_client_project
-  GIT_REPOSITORY https://${URL_BASE}/bxq2011hust/client-c.git
-  GIT_TAG        18bad449c47633b63c326ea3b04602e2a9fd9971
+  GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/client-c.git
+  GIT_TAG        da58ab021485c5f2939984cf4bda0f58f43950c2
   # SOURCE_DIR     ${CMAKE_SOURCE_DIR}/deps/src/
-  PATCH_COMMAND  export PATH=${GRPC_ROOT}/bin:\$PATH COMMAND protoc --version COMMAND bash third_party/kvproto/scripts/generate_cpp.sh COMMAND ${SED_CMMAND} "s#PUBLIC#PRIVATE#g" third_party/kvproto/cpp/CMakeLists.txt
+  PATCH_COMMAND  git submodule foreach --recursive git reset --hard COMMAND export PATH=${GRPC_ROOT}/bin:\$PATH COMMAND protoc --version COMMAND bash third_party/kvproto/scripts/generate_cpp.sh COMMAND ${SED_CMMAND} "s#PUBLIC#PRIVATE#g" third_party/kvproto/cpp/CMakeLists.txt
   # LOG_BUILD true
 )
 
