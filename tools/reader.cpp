@@ -17,14 +17,18 @@
  * @file reader.cpp
  * @author: xingqiangbai
  * @date 2020-06-29
+ * @file reader.cpp
+ * @author: ancelmo
+ * @date 2021-11-05
  */
 
-#include "RocksDBStorage.h"
-#include "bcos-framework/libtable/TableStorage.h"
+#include "../bcos-storage/RocksDBStorage.h"
 #include "boost/filesystem.hpp"
+#include "interfaces/storage/StorageInterface.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
+#include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/join.hpp>
@@ -35,6 +39,7 @@
 #include <boost/throw_exception.hpp>
 #include <cstdlib>
 #include <functional>
+#include <iterator>
 
 using namespace std;
 using namespace rocksdb;
@@ -100,96 +105,76 @@ int main(int argc, const char* argv[])
 
     auto adapter = std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db));
 
-    auto sysTableInfo = std::make_shared<storage::TableInfo>(tableName, TableStorage::SYS_TABLE_KEY,
-        std::string(TableStorage::SYS_TABLE_KEY_FIELDS) + "," +
-            TableStorage::SYS_TABLE_VALUE_FIELDS);
-    TableInfo::Ptr tableInfo = sysTableInfo;
-    if (tableName != TableStorage::SYS_TABLES)
-    {
-        std::promise<Entry::Ptr> entryPromise;
-        adapter->asyncGetRow(sysTableInfo, tableName, [&](Error::Ptr&& error, Entry::Ptr&& entry) {
-            if (error)
-            {
-                BOOST_THROW_EXCEPTION(*error);
-            }
-            entryPromise.set_value(std::move(entry));
-        });
-
-        auto entry = entryPromise.get_future().get();
-
-        if (!entry)
-        {
-            cout << tableName << " doesn't exist in DB:" << storagePath + "/" + storageName << endl;
-            exit(1);
-        }
-
-        tableInfo =
-            make_shared<TableInfo>(tableName, entry->getField(TableStorage::SYS_TABLE_KEY_FIELDS),
-                entry->getField(TableStorage::SYS_TABLE_VALUE_FIELDS));
-    }
     if (iterate)
     {
-        cout << "iterator " << tableInfo->name << endl;
+        cout << "iterator " << tableName << endl;
 
-        std::promise<std::vector<std::string>> keysPromise;
+        std::vector<std::string> keys;
         adapter->asyncGetPrimaryKeys(
-            tableInfo, nullptr, [&](Error::Ptr&& error, std::vector<std::string>&& keys) {
+            tableName, {}, [&](Error::Ptr error, std::vector<std::string> _keys) {
                 if (error)
                 {
                     BOOST_THROW_EXCEPTION(*error);
                 }
 
-                keysPromise.set_value(std::move(keys));
+                keys = std::move(_keys);
             });
-
-        auto keys = keysPromise.get_future().get();
 
         if (keys.empty())
         {
             cout << tableName << " is empty" << endl;
             return 0;
         }
+
         // cout << "keys=" << boost::algorithm::join(keys, "\t") << endl;
         for (auto& k : keys)
         {
-            cout << "key=" << k << "|";
+            std::string hex;
+            hex.reserve(k.size() * 2);
+            boost::algorithm::hex_lower(k.begin(), k.end(), std::back_inserter(hex));
+            cout << "key=" << hex << "|";
 
-            std::promise<Entry::Ptr> rowPromise;
-            adapter->asyncGetRow(tableInfo, k, [&](Error::Ptr&& error, Entry::Ptr&& entry) {
+            std::optional<Entry> row;
+            adapter->asyncGetRow(tableName, k, [&](Error::Ptr error, std::optional<Entry> entry) {
                 if (error)
                 {
                     BOOST_THROW_EXCEPTION(*error);
                 }
 
-                rowPromise.set_value(std::move(entry));
+                row = std::move(entry);
             });
-            auto row = rowPromise.get_future().get();
 
-            for (auto& it : *row)
+            for (auto it : *row)
             {
-                cout << " [" << it << "] ";
+                std::string hex;
+                hex.reserve(it.size() * 2);
+                boost::algorithm::hex_lower(it.begin(), it.end(), std::back_inserter(hex));
+                cout << " [" << hex << "] ";
             }
-            cout << " [status=" << row->status() << "]"
-                 << " [num=" << row->num() << "]";
+            cout << " [status=" << row->status() << "]";
+            //  << " [num=" << row->num() << "]";
             cout << endl;
         }
         return 0;
     }
-    std::promise<Entry::Ptr> rowPromise;
-    adapter->asyncGetRow(tableInfo, key, [&](Error::Ptr&& error, Entry::Ptr&& entry) {
+
+    std::optional<Entry> row;
+    adapter->asyncGetRow(tableName, key, [&](Error::Ptr error, std::optional<Entry> entry) {
         if (error)
         {
             BOOST_THROW_EXCEPTION(*error);
         }
 
-        rowPromise.set_value(std::move(entry));
+        row = std::move(entry);
     });
-    auto row = rowPromise.get_future().get();
-    for (auto& it : *row)
+
+    for (auto it : *row)
     {
-        cout << "[" << it << "]";
+        std::string hex;
+        hex.reserve(it.size() * 2);
+        boost::algorithm::hex_lower(it.begin(), it.end(), std::back_inserter(hex));
+        cout << "[" << hex << "]";
     }
-    cout << " [status=" << row->status() << "]"
-         << " [num=" << row->num() << "]" << endl;
+    cout << " [status=" << row->status() << "]";
     return 0;
 }
