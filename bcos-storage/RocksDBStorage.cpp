@@ -315,8 +315,10 @@ void RocksDBStorage::asyncCommit(
         tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
         if (m_writeBatch)
         {
+            WriteOptions options;
+            options.sync = true;
             count = m_writeBatch->Count();
-            m_db->Write(WriteOptions(), m_writeBatch.get());
+            m_db->Write(options, m_writeBatch.get());
             m_writeBatch = nullptr;
         }
     }
