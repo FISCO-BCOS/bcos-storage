@@ -81,7 +81,6 @@ if(TOOLS)
 endif()
 
 if (TESTS)
-    set(USE_TiKV ON)
     enable_testing()
     set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
     add_subdirectory(test)

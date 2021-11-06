@@ -19,7 +19,6 @@
 using namespace bcos::storage;
 using namespace std;
 
-
 namespace bcos::test
 {
 size_t total = 500;

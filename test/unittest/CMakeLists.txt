@@ -15,14 +15,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ------------------------------------------------------------------------------
-file(GLOB_RECURSE SOURCES "*.cpp" "*.h")
+list(APPEND SOURCES "TestRocksDBStorage.cpp" "main.cpp")
 # cmake settings
 
 include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-storage)
-if(DISABLE_TIKV_TESTS)
+
+if(USE_TiKV)
+    list(APPEND SOURCES "TestTiKVStorage.cpp")
+else()
     set(EXCLUDE_SUITES "TestTiKVStorage")
 endif()
+
 config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "${EXCLUDE_SUITES}")
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
