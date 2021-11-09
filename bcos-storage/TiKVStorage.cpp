@@ -84,6 +84,13 @@ void TiKVStorage::asyncGetRow(const std::string_view& _table, const std::string_
 {
     try
     {
+        if (!isValid(_table, _key))
+        {
+            STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncGetRow empty tableName or key")
+                                      << LOG_KV("table", _table) << LOG_KV("key", _key);
+            _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"), {});
+            return;
+        }
         auto start = utcTime();
         auto dbKey = toDBKey(_table, _key);
         auto snap = Snapshot(m_cluster.get());
@@ -126,6 +133,13 @@ void TiKVStorage::asyncGetRows(const std::string_view& _table,
 {
     try
     {
+        if (!isValid(_table))
+        {
+            STORAGE_TIKV_LOG(WARNING)
+                << LOG_DESC("asyncGetRow empty tableName") << LOG_KV("table", _table);
+            _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName"), {});
+            return;
+        }
         auto start = utcTime();
         std::visit(
             [&](auto const& keys) {
@@ -189,6 +203,13 @@ void TiKVStorage::asyncSetRow(const std::string_view& _table, const std::string_
 {
     try
     {
+        if (!isValid(_table, _key))
+        {
+            STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncGetRow empty tableName or key")
+                                      << LOG_KV("table", _table) << LOG_KV("key", _key);
+            _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"));
+            return;
+        }
         auto dbKey = toDBKey(_table, _key);
         Txn txn(m_cluster.get());
 
@@ -223,6 +244,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& param,
         auto start = utcTime();
         std::unordered_map<std::string, std::string> mutations;
         tbb::spin_mutex writeMutex;
+        atomic_bool isTableValid = true;
         storage->parallelTraverse(true,
             [&](const std::string_view& table, const std::string_view& key, Entry const& entry) {
                 auto dbKey = toDBKey(table, key);
@@ -240,6 +262,11 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& param,
                 }
                 return true;
             });
+        if (!isTableValid)
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"), 0);
+            return;
+        }
         auto encode = utcTime();
         if (mutations.empty() && param.startTS == 0)
         {

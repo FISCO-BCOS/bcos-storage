@@ -35,4 +35,15 @@ inline std::string toDBKey(const std::string_view& tableName, const std::string_
 }
 std::string encodeEntry(const Entry& entry);
 std::optional<Entry> decodeEntry(TableInfo::ConstPtr tableInfo, const std::string_view& buffer);
+
+inline bool isValid(const std::string_view& tableName)
+{
+    return !tableName.empty();
+}
+
+inline bool isValid(const std::string_view& tableName, const std::string_view& key)
+{
+    return !tableName.empty() && !key.empty();
+}
+
 }  // namespace bcos::storage
