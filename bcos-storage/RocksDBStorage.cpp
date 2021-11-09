@@ -81,6 +81,13 @@ void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::stri
 {
     try
     {
+        if (!isValid(_table, _key))
+        {
+            STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC("asyncGetRow empty tableName or key")
+                                         << LOG_KV("table", _table) << LOG_KV("key", _key);
+            _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"), {});
+            return;
+        }
         auto start = utcTime();
         PinnableSlice value;
         auto dbKey = toDBKey(_table, _key);
@@ -107,6 +114,7 @@ void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::stri
             return;
         }
         auto end = utcTime();
+        // TODO: the getTableInfo can be optimized, remove or add cache
         TableInfo::ConstPtr tableInfo = getTableInfo(_table);
         if (!tableInfo)
         {
@@ -137,6 +145,13 @@ void RocksDBStorage::asyncGetRows(const std::string_view& _table,
 {
     try
     {
+        if (!isValid(_table))
+        {
+            STORAGE_ROCKSDB_LOG(WARNING)
+                << LOG_DESC("asyncGetRow empty tableName") << LOG_KV("table", _table);
+            _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName"), {});
+            return;
+        }
         auto start = utcTime();
         std::visit(
             [&](auto const& keys) {
@@ -220,6 +235,13 @@ void RocksDBStorage::asyncSetRow(const std::string_view& _table, const std::stri
 {
     try
     {
+        if (!isValid(_table, _key))
+        {
+            STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC("asyncGetRow empty tableName or key")
+                                         << LOG_KV("table", _table) << LOG_KV("key", _key);
+            _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"));
+            return;
+        }
         auto dbKey = toDBKey(_table, _key);
         WriteOptions options;
         rocksdb::Status status;
@@ -271,8 +293,14 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param,
                 m_writeBatch = std::make_shared<WriteBatch>();
             }
         }
+        atomic_bool isTableValid = true;
         storage->parallelTraverse(true,
             [&](const std::string_view& table, const std::string_view& key, Entry const& entry) {
+                if (!isValid(table, key))
+                {
+                    isTableValid = false;
+                    return false;
+                }
                 auto dbKey = toDBKey(table, key);
 
                 if (entry.status() == Entry::DELETED)
@@ -288,6 +316,15 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param,
                 }
                 return true;
             });
+        if (!isTableValid)
+        {
+            {
+                tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
+                m_writeBatch = nullptr;
+            }
+            callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"), 0);
+            return;
+        }
         auto end = utcTime();
         callback(nullptr, 0);
         STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncPrepare") << LOG_KV("number", param.number)
