@@ -28,6 +28,7 @@
 #include <rocksdb/slice.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/spin_mutex.h>
+#include <boost/algorithm/hex.hpp>
 #include <exception>
 #include <future>
 
@@ -70,7 +71,7 @@ void RocksDBStorage::asyncGetPrimaryKeys(const std::string_view& _table,
     delete iter;
     auto end = utcTime();
     _callback(nullptr, std::move(result));
-    STORAGE_ROCKSDB_LOG(DEBUG) << LOG_DESC("asyncGetPrimaryKeys") << LOG_KV("table", _table)
+    STORAGE_ROCKSDB_LOG(TRACE) << LOG_DESC("asyncGetPrimaryKeys") << LOG_KV("table", _table)
                                << LOG_KV("count", result.size())
                                << LOG_KV("read time(ms)", end - start)
                                << LOG_KV("callback time(ms)", utcTime() - end);
@@ -127,8 +128,9 @@ void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::stri
         }
         auto end2 = utcTime();
         _callback(nullptr, decodeEntry(tableInfo, value.ToStringView()));
-        STORAGE_ROCKSDB_LOG(DEBUG)
-            << LOG_DESC("asyncGetRow") << LOG_KV("table", _table) << LOG_KV("key", _key)
+        STORAGE_ROCKSDB_LOG(TRACE)
+            << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
+            << LOG_KV("key", boost::algorithm::hex_lower(std::string(_key)))
             << LOG_KV("read time(ms)", end - start) << LOG_KV("tableInfo time(ms)", end2 - end)
             << LOG_KV("callback time(ms)", utcTime() - end2);
     }
@@ -215,7 +217,7 @@ void RocksDBStorage::asyncGetRows(const std::string_view& _table,
                     });
                 auto decode = utcTime();
                 _callback(nullptr, std::move(entries));
-                STORAGE_ROCKSDB_LOG(DEBUG)
+                STORAGE_ROCKSDB_LOG(TRACE)
                     << LOG_DESC("asyncGetRows") << LOG_KV("table", _table)
                     << LOG_KV("count", entries.size()) << LOG_KV("read time(ms)", end - start)
                     << LOG_KV("decode time(ms)", decode - end)
@@ -247,14 +249,16 @@ void RocksDBStorage::asyncSetRow(const std::string_view& _table, const std::stri
         rocksdb::Status status;
         if (_entry.status() == Entry::DELETED)
         {
-            STORAGE_ROCKSDB_LOG(DEBUG)
-                << LOG_DESC("asyncSetRow delete") << LOG_KV("table", _table) << LOG_KV("key", _key);
+            STORAGE_ROCKSDB_LOG(TRACE)
+                << LOG_DESC("asyncSetRow delete") << LOG_KV("table", _table)
+                << LOG_KV("key", boost::algorithm::hex_lower(std::string(_key)));
             status = m_db->Delete(options, dbKey);
         }
         else
         {
-            STORAGE_ROCKSDB_LOG(DEBUG)
-                << LOG_DESC("asyncSetRow") << LOG_KV("table", _table) << LOG_KV("key", _key);
+            STORAGE_ROCKSDB_LOG(TRACE)
+                << LOG_DESC("asyncSetRow") << LOG_KV("table", _table)
+                << LOG_KV("key", boost::algorithm::hex_lower(std::string(_key)));
             std::string value = encodeEntry(_entry);
             status = m_db->Put(options, dbKey, value);
         }
@@ -341,13 +345,17 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param,
 void RocksDBStorage::asyncCommit(
     const TwoPCParams& params, std::function<void(Error::Ptr)> callback) noexcept
 {
+    size_t count = 0;
     auto start = utcTime();
     std::ignore = params;
     {
         tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
         if (m_writeBatch)
         {
-            m_db->Write(WriteOptions(), m_writeBatch.get());
+            WriteOptions options;
+            options.sync = true;
+            count = m_writeBatch->Count();
+            m_db->Write(options, m_writeBatch.get());
             m_writeBatch = nullptr;
         }
     }
@@ -356,7 +364,8 @@ void RocksDBStorage::asyncCommit(
     STORAGE_ROCKSDB_LOG(INFO) << LOG_DESC("asyncCommit") << LOG_KV("number", params.number)
                               << LOG_KV("startTS", params.startTS)
                               << LOG_KV("time(ms)", utcTime() - start)
-                              << LOG_KV("callback time(ms)", utcTime() - end);
+                              << LOG_KV("callback time(ms)", utcTime() - end)
+                              << LOG_KV("count", count);
 }
 
 void RocksDBStorage::asyncRollback(

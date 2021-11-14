@@ -30,6 +30,7 @@ const char* const TABLE_KEY_SPLIT = ":";
 inline std::string toDBKey(const std::string_view& tableName, const std::string_view& key)
 {
     std::string dbKey;
+    dbKey.reserve(tableName.size() + 1 + key.size());
     dbKey.append(tableName).append(TABLE_KEY_SPLIT).append(key);
     return dbKey;
 }
