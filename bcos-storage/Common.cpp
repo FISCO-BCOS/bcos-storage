@@ -19,7 +19,6 @@
  * @date: 2021-10-11
  */
 
-
 #include "Common.h"
 #include <boost/archive/basic_archive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
@@ -28,6 +27,7 @@
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/serialization/vector.hpp>
+#include <optional>
 
 using namespace std;
 
@@ -39,39 +39,28 @@ std::string encodeEntry(const Entry& entry)
     boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
     boost::archive::binary_oarchive archive(outputStream,
         boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
-    // TODO: try to optimize the implement of serialization
-    auto fields = entry.fields();
-    vector<string> data;
-    data.reserve(fields.size());
-    for (auto& value : fields)
-    {
-        std::visit(
-            [&](auto const& v) { data.push_back(std::string((const char*)v.data(), v.size())); },
-            value);
-    }
-    archive << data;
+
+    EntrySaveWrapper wrapper(entry);
+    archive << wrapper;
+
     outputStream.flush();
 
     return value;
 }
 
-std::optional<Entry> decodeEntry(TableInfo::ConstPtr tableInfo, const std::string_view& buffer)
+std::optional<Entry> decodeEntry(const std::string_view& buffer)
 {
-    Entry entry(tableInfo);
+    auto entry = std::make_optional<Entry>();
 
     boost::iostreams::stream<boost::iostreams::array_source> inputStream(
         buffer.data(), buffer.size());
     boost::archive::binary_iarchive archive(inputStream,
         boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
 
-    std::vector<std::string> data;
-    archive >> data;
-    if (data.empty())
-    {
-        return {};
-    }
-    entry.importFields(std::move(data));
-    return std::optional<Entry>(entry);
+    EntryLoadWrapper wrapper(*entry);
+    archive >> wrapper;
+
+    return entry;
 }
 
 }  // namespace bcos::storage

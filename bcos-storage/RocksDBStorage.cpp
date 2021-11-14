@@ -43,9 +43,9 @@ RocksDBStorage::RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db) : m_db(std::mo
     m_writeBatch = std::make_shared<WriteBatch>();
 }
 
-void RocksDBStorage::asyncGetPrimaryKeys(const std::string_view& _table,
+void RocksDBStorage::asyncGetPrimaryKeys(std::string_view _table,
     const std::optional<Condition const>& _condition,
-    std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) noexcept
+    std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback)
 {
     auto start = utcTime();
     std::vector<std::string> result;
@@ -77,8 +77,8 @@ void RocksDBStorage::asyncGetPrimaryKeys(const std::string_view& _table,
                                << LOG_KV("callback time(ms)", utcTime() - end);
 }
 
-void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::string_view& _key,
-    std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) noexcept
+void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
+    std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback)
 {
     try
     {
@@ -115,19 +115,8 @@ void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::stri
             return;
         }
         auto end = utcTime();
-        // TODO: the getTableInfo can be optimized, remove or add cache
-        TableInfo::ConstPtr tableInfo = getTableInfo(_table);
-        if (!tableInfo)
-        {
-            STORAGE_ROCKSDB_LOG(ERROR) << LOG_DESC("asyncGetRow can't get tableInfo")
-                                       << LOG_KV("table", _table) << LOG_KV("key", _key);
-            _callback(BCOS_ERROR_UNIQUE_PTR(
-                          TableNotExists, "asyncGetRow failed because can't get TableInfo!"),
-                {});
-            return;
-        }
         auto end2 = utcTime();
-        _callback(nullptr, decodeEntry(tableInfo, value.ToStringView()));
+        _callback(nullptr, decodeEntry(value.ToStringView()));
         STORAGE_ROCKSDB_LOG(TRACE)
             << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
             << LOG_KV("key", boost::algorithm::hex_lower(std::string(_key)))
@@ -140,10 +129,10 @@ void RocksDBStorage::asyncGetRow(const std::string_view& _table, const std::stri
     }
 }
 
-void RocksDBStorage::asyncGetRows(const std::string_view& _table,
+void RocksDBStorage::asyncGetRows(std::string_view _table,
     const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
         _keys,
-    std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) noexcept
+    std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback)
 {
     try
     {
@@ -158,16 +147,6 @@ void RocksDBStorage::asyncGetRows(const std::string_view& _table,
         std::visit(
             [&](auto const& keys) {
                 std::vector<std::optional<Entry>> entries(keys.size());
-                TableInfo::ConstPtr tableInfo = getTableInfo(_table);
-                if (!tableInfo)
-                {
-                    STORAGE_ROCKSDB_LOG(ERROR)
-                        << LOG_DESC("asyncGetRows can't get tableInfo") << LOG_KV("table", _table);
-                    _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists,
-                                  "asyncGetRows failed because can't get TableInfo!"),
-                        std::vector<std::optional<Entry>>());
-                    return;
-                }
 
                 std::vector<std::string> dbKeys(keys.size());
                 std::vector<Slice> slices(keys.size());
@@ -194,7 +173,7 @@ void RocksDBStorage::asyncGetRows(const std::string_view& _table,
 
                             if (status.ok())
                             {
-                                entries[i] = decodeEntry(tableInfo, value.ToStringView());
+                                entries[i] = decodeEntry(value.ToStringView());
                             }
                             else
                             {
@@ -227,13 +206,12 @@ void RocksDBStorage::asyncGetRows(const std::string_view& _table,
     }
     catch (const std::exception& e)
     {
-        _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "Get rows failed! ", e),
-            std::vector<std::optional<Entry>>());
+        _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(UnknownEntryType, "Get rows failed! ", e), {});
     }
 }
 
-void RocksDBStorage::asyncSetRow(const std::string_view& _table, const std::string_view& _key,
-    Entry _entry, std::function<void(Error::UniquePtr)> _callback) noexcept
+void RocksDBStorage::asyncSetRow(std::string_view _table, std::string_view _key, Entry _entry,
+    std::function<void(Error::UniquePtr)> _callback)
 {
     try
     {
@@ -282,9 +260,8 @@ void RocksDBStorage::asyncSetRow(const std::string_view& _table, const std::stri
     }
 }
 
-void RocksDBStorage::asyncPrepare(const TwoPCParams& param,
-    const TraverseStorageInterface::ConstPtr& storage,
-    std::function<void(Error::Ptr, uint64_t startTS)> callback) noexcept
+void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorageInterface& storage,
+    std::function<void(Error::Ptr, uint64_t startTS)> callback)
 {
     std::ignore = param;
     try
@@ -298,7 +275,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param,
             }
         }
         atomic_bool isTableValid = true;
-        storage->parallelTraverse(true,
+        storage.parallelTraverse(true,
             [&](const std::string_view& table, const std::string_view& key, Entry const& entry) {
                 if (!isValid(table, key))
                 {
@@ -343,7 +320,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param,
 }
 
 void RocksDBStorage::asyncCommit(
-    const TwoPCParams& params, std::function<void(Error::Ptr)> callback) noexcept
+    const TwoPCParams& params, std::function<void(Error::Ptr)> callback)
 {
     size_t count = 0;
     auto start = utcTime();
@@ -369,7 +346,7 @@ void RocksDBStorage::asyncCommit(
 }
 
 void RocksDBStorage::asyncRollback(
-    const TwoPCParams& params, std::function<void(Error::Ptr)> callback) noexcept
+    const TwoPCParams& params, std::function<void(Error::Ptr)> callback)
 {
     auto start = utcTime();
 
