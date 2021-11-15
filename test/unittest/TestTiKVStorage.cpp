@@ -19,7 +19,6 @@
 using namespace bcos::storage;
 using namespace std;
 
-
 namespace bcos::test
 {
 size_t total = 500;
@@ -114,7 +113,7 @@ struct TestTiKVStorageFixture
         params1.primaryTableKey = "key0";
         auto start = std::chrono::system_clock::now();
         // prewrite
-        storage->asyncPrepare(params1, stateStorage, [&](Error::Ptr error, uint64_t ts) {
+        storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_NE(ts, 0);
             params1.startTS = ts;
@@ -135,7 +134,7 @@ struct TestTiKVStorageFixture
                         BOOST_CHECK_EQUAL(entries.size(), tableEntries);
                         for (size_t i = 0; i < tableEntries; ++i)
                         {
-                            BOOST_CHECK_EQUAL(entries[i]->getField("v4"), std::string("value3"));
+                            BOOST_CHECK_EQUAL(entries[i]->getField(3), std::string("value3"));
                         }
                     });
             });
@@ -149,7 +148,7 @@ struct TestTiKVStorageFixture
             testTable->setRow(key, std::move(entry));
         }
         params1.startTS = 0;
-        storage->asyncPrepare(params1, stateStorage, [&](Error::Ptr error, uint64_t ts) {
+        storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_NE(ts, 0);
             params1.startTS = ts;
@@ -320,8 +319,8 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
 
     storage->asyncGetRow(tableInfo->name(), "newkey" + boost::lexical_cast<std::string>(1050),
         [&](Error::UniquePtr error, std::optional<Entry> entry) {
-            BOOST_CHECK_NE(error.get(), nullptr);
-            BOOST_CHECK_EQUAL(entry.has_value(), false);
+            BOOST_CHECK(!error.get());
+            BOOST_CHECK(entry);
         });
 
     // clean new data
@@ -434,7 +433,7 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
         table2Keys.push_back(key2);
     }
 
-    storage->asyncPrepare(bcos::storage::TransactionalStorageInterface::TwoPCParams(), stateStorage,
+    storage->asyncPrepare(bcos::storage::TransactionalStorageInterface::TwoPCParams(), *stateStorage,
         [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_NE(ts, 0);
@@ -459,7 +458,7 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
 
                     for (size_t i = 0; i < 10; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField("value1"),
+                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
                             std::string("hello world!") + table1Keys[i][3]);
                     }
                 });
@@ -482,7 +481,7 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
 
                     for (size_t i = 0; i < 10; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField("value3"),
+                        BOOST_CHECK_EQUAL(entries[i]->getField(2),
                             std::string("hello world!") + table2Keys[i][3]);
                     }
                 });
@@ -555,20 +554,20 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
     params1.primaryTableKey = "key0";
     auto stateStorage0 = std::make_shared<bcos::storage::StateStorage>(storage);
     // check empty storage error
-    storage->asyncPrepare(params1, stateStorage0, [&](Error::Ptr error, uint64_t ts) {
+    storage->asyncPrepare(params1, *stateStorage0, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_NE(error.get(), nullptr);
         BOOST_CHECK_EQUAL(ts, 0);
     });
     // prewrite
-    storage->asyncPrepare(params1, stateStorage, [&](Error::Ptr error, uint64_t ts) {
+    storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_EQUAL(error.get(), nullptr);
         BOOST_CHECK_NE(ts, 0);
         params1.startTS = ts;
-        storage2->asyncPrepare(params1, stateStorage2, [&](Error::Ptr error, uint64_t ts) {
+        storage2->asyncPrepare(params1, *stateStorage2, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
         });
-        storage3->asyncPrepare(params1, stateStorage3, [&](Error::Ptr error, uint64_t ts) {
+        storage3->asyncPrepare(params1, *stateStorage3, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
         });
@@ -594,7 +593,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
 
                     for (size_t i = 0; i < tableEntries; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField("value1"),
+                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
                             std::string("hello world!") + table1Keys[i].substr(3));
                     }
                 });
@@ -617,7 +616,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
 
                     for (size_t i = 0; i < tableEntries; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField("value3"),
+                        BOOST_CHECK_EQUAL(entries[i]->getField(2),
                             std::string("hello world!") + table2Keys[i].substr(3));
                     }
                 });
@@ -687,7 +686,7 @@ BOOST_AUTO_TEST_CASE(singleStorageRollback)
     params1.number = 100;
     params1.primaryTableName = table1Name;
     params1.primaryTableKey = "key0";
-    storage->asyncPrepare(params1, stateStorage, [&](Error::Ptr error, uint64_t ts) {
+    storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_EQUAL(error.get(), nullptr);
         BOOST_CHECK_NE(ts, 0);
     });
@@ -755,16 +754,16 @@ BOOST_AUTO_TEST_CASE(multiStorageRollback)
     params1.primaryTableKey = "key0";
     auto stateStorage0 = std::make_shared<bcos::storage::StateStorage>(storage);
     // check empty storage error
-    storage->asyncPrepare(params1, stateStorage0, [&](Error::Ptr error, uint64_t ts) {
+    storage->asyncPrepare(params1, *stateStorage0, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_NE(error.get(), nullptr);
         BOOST_CHECK_EQUAL(ts, 0);
     });
     // prewrite
-    storage->asyncPrepare(params1, stateStorage, [&](Error::Ptr error, uint64_t ts) {
+    storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_EQUAL(error.get(), nullptr);
         BOOST_CHECK_NE(ts, 0);
         params1.startTS = ts;
-        storage2->asyncPrepare(params1, stateStorage2, [&](Error::Ptr error, uint64_t ts) {
+        storage2->asyncPrepare(params1, *stateStorage2, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
         });
@@ -850,16 +849,16 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
     params1.primaryTableKey = "key0";
     auto stateStorage0 = std::make_shared<bcos::storage::StateStorage>(storage);
     // check empty storage error
-    storage->asyncPrepare(params1, stateStorage0, [&](Error::Ptr error, uint64_t ts) {
+    storage->asyncPrepare(params1, *stateStorage0, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_NE(error.get(), nullptr);
         BOOST_CHECK_EQUAL(ts, 0);
     });
     // prewrite
-    storage->asyncPrepare(params1, stateStorage, [&](Error::Ptr error, uint64_t ts) {
+    storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_EQUAL(error.get(), nullptr);
         BOOST_CHECK_NE(ts, 0);
         params1.startTS = ts;
-        storage2->asyncPrepare(params1, stateStorage2, [&](Error::Ptr error, uint64_t ts) {
+        storage2->asyncPrepare(params1, *stateStorage2, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
         });
@@ -889,15 +888,15 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
 
     // recommit prewrite
     params1.startTS = 0;
-    storage->asyncPrepare(params1, stateStorage, [&](Error::Ptr error, uint64_t ts) {
+    storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_EQUAL(error.get(), nullptr);
         BOOST_CHECK_NE(ts, 0);
         params1.startTS = ts;
-        storage2->asyncPrepare(params1, stateStorage2, [&](Error::Ptr error, uint64_t ts) {
+        storage2->asyncPrepare(params1, *stateStorage2, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
         });
-        storage3->asyncPrepare(params1, stateStorage3, [&](Error::Ptr error, uint64_t ts) {
+        storage3->asyncPrepare(params1, *stateStorage3, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
         });
@@ -923,7 +922,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
 
                     for (size_t i = 0; i < tableEntries; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField("value1"),
+                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
                             std::string("hello world!") + table1Keys[i].substr(3));
                     }
                 });
@@ -946,7 +945,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
 
                     for (size_t i = 0; i < tableEntries; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField("value3"),
+                        BOOST_CHECK_EQUAL(entries[i]->getField(2),
                             std::string("hello world!") + table2Keys[i].substr(3));
                     }
                 });
@@ -962,7 +961,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
                     BOOST_CHECK_EQUAL(entries.size(), total);
                     for (size_t i = 0; i < total; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField("v4"), std::string("value3"));
+                        BOOST_CHECK_EQUAL(entries[i]->getField(3), std::string("value3"));
                     }
                 });
         });
@@ -1062,16 +1061,16 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
     params1.primaryTableKey = "key0";
     auto stateStorage0 = std::make_shared<bcos::storage::StateStorage>(storage);
     // check empty storage error
-    storage->asyncPrepare(params1, stateStorage0, [&](Error::Ptr error, uint64_t ts) {
+    storage->asyncPrepare(params1, *stateStorage0, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_NE(error.get(), nullptr);
         BOOST_CHECK_EQUAL(ts, 0);
     });
     // prewrite
-    storage->asyncPrepare(params1, stateStorage, [&](Error::Ptr error, uint64_t ts) {
+    storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_EQUAL(error.get(), nullptr);
         BOOST_CHECK_NE(ts, 0);
         params1.startTS = ts;
-        storage2->asyncPrepare(params1, stateStorage2, [&](Error::Ptr error, uint64_t ts) {
+        storage2->asyncPrepare(params1, *stateStorage2, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
         });
@@ -1081,20 +1080,20 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
     auto storage4 = std::make_shared<TiKVStorage>(m_cluster);
     auto stateStorage4 = std::make_shared<bcos::storage::StateStorage>(storage3);
     params1.startTS = 0;
-    storage->asyncPrepare(params1, stateStorage, [&](Error::Ptr error, uint64_t ts) {
+    storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_EQUAL(error.get(), nullptr);
         BOOST_CHECK_NE(ts, 0);
         params1.startTS = ts;
-        storage2->asyncPrepare(params1, stateStorage2, [&](Error::Ptr error, uint64_t ts) {
+        storage2->asyncPrepare(params1, *stateStorage2, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
         });
-        storage3->asyncPrepare(params1, stateStorage3, [&](Error::Ptr error, uint64_t ts) {
+        storage3->asyncPrepare(params1, *stateStorage3, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
         });
         // secondary storage accept empty stateStorage
-        storage4->asyncPrepare(params1, stateStorage4, [&](Error::Ptr error, uint64_t ts) {
+        storage4->asyncPrepare(params1, *stateStorage4, [&](Error::Ptr error, uint64_t ts) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(ts, 0);
         });
@@ -1120,7 +1119,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
 
                     for (size_t i = 0; i < tableEntries; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField("value1"),
+                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
                             std::string("hello world!") + table1Keys[i].substr(3));
                     }
                 });
@@ -1143,7 +1142,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
 
                     for (size_t i = 0; i < tableEntries; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField("value3"),
+                        BOOST_CHECK_EQUAL(entries[i]->getField(2),
                             std::string("hello world!") + table2Keys[i].substr(3));
                     }
                 });
@@ -1159,7 +1158,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
                     BOOST_CHECK_EQUAL(entries.size(), total);
                     for (size_t i = 0; i < total; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField("v4"), std::string("value3"));
+                        BOOST_CHECK_EQUAL(entries[i]->getField(3), std::string("value3"));
                     }
                 });
         });

@@ -62,7 +62,6 @@ include(InstallBcosFrameworkDependencies)
 option(USE_TiKV "build tikv storage or not" OFF)
 
 if (TESTS)
-    set(USE_TiKV ON)
     enable_testing()
     set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
 endif()
@@ -75,10 +74,6 @@ endif()
 set(STORAGE_TARGET "bcos-storage")
 add_subdirectory(bcos-storage)
 
-if (TESTS)
-    add_subdirectory(test)
-endif()
-
 install(
     DIRECTORY "bcos-storage"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/bcos-storage"
@@ -90,3 +85,8 @@ if(TOOLS)
     add_subdirectory(tools)
 endif()
 
+if (TESTS)
+    enable_testing()
+    set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
+    add_subdirectory(test)
+endif()

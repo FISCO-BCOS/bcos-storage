@@ -49,25 +49,24 @@ public:
 
     virtual ~TiKVStorage() {}
 
-    void asyncGetPrimaryKeys(const std::string_view& _table,
+    void asyncGetPrimaryKeys(std::string_view _table,
         const std::optional<Condition const>& _condition,
         std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) noexcept
         override;
 
-    void asyncGetRow(const std::string_view& table, const std::string_view& _key,
-        std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) noexcept
-        override;
+    void asyncGetRow(std::string_view table, std::string_view _key,
+        std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) noexcept override;
 
-    void asyncGetRows(const std::string_view& table,
+    void asyncGetRows(std::string_view table,
         const std::variant<const gsl::span<std::string_view const>,
             const gsl::span<std::string const>>& _keys,
-        std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)>
-            _callback) noexcept override;
+        std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) noexcept
+        override;
 
-    void asyncSetRow(const std::string_view& table, const std::string_view& key, Entry entry,
+    void asyncSetRow(std::string_view table, std::string_view key, Entry entry,
         std::function<void(Error::UniquePtr)> callback) noexcept override;
 
-    void asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface::ConstPtr& storage,
+    void asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface& storage,
         std::function<void(Error::Ptr, uint64_t)> callback) noexcept override;
 
     void asyncCommit(

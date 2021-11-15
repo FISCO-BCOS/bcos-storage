@@ -30,11 +30,76 @@ const char* const TABLE_KEY_SPLIT = ":";
 inline std::string toDBKey(const std::string_view& tableName, const std::string_view& key)
 {
     std::string dbKey;
+    dbKey.reserve(tableName.size() + 1 + key.size());
     dbKey.append(tableName).append(TABLE_KEY_SPLIT).append(key);
     return dbKey;
 }
+
+class EntrySaveWrapper
+{
+public:
+    EntrySaveWrapper(const Entry& _entry) : m_entry(_entry) {}
+
+    template <class Archive>
+    void serialize(Archive& ar, [[maybe_unused]] const unsigned int version) const
+    {
+        uint32_t fieldCount = m_entry.fieldCount();
+        ar& fieldCount;
+        for (auto it : m_entry)
+        {
+            uint32_t fieldSize = it.size();
+            ar& fieldSize;
+            for (auto c : it)
+            {
+                ar& c;
+            }
+        }
+
+        ar& m_entry.status();
+    }
+
+private:
+    const Entry& m_entry;
+};
+
+class EntryLoadWrapper
+{
+public:
+    EntryLoadWrapper(Entry& _entry) : m_entry(_entry) {}
+
+    template <class Archive>
+    void serialize(Archive& ar, [[maybe_unused]] const unsigned int version)
+    {
+        uint32_t fieldCount;
+        ar& fieldCount;
+
+        std::vector<std::string> fields(fieldCount);
+        for (uint32_t i = 0; i < fieldCount; ++i)
+        {
+            auto& field = fields[i];
+            uint32_t fieldSize;
+            ar& fieldSize;
+
+            field.resize(fieldSize);
+            for (size_t i = 0; i < fieldSize; ++i)
+            {
+                ar& field[i];
+            }
+        }
+
+        Entry::Status status;
+        ar& status;
+
+        m_entry.importFields(std::move(fields));
+        m_entry.setStatus(status);
+    }
+
+private:
+    Entry& m_entry;
+};
+
 std::string encodeEntry(const Entry& entry);
-std::optional<Entry> decodeEntry(TableInfo::ConstPtr tableInfo, const std::string_view& buffer);
+std::optional<Entry> decodeEntry(const std::string_view& buffer);
 
 inline bool isValid(const std::string_view& tableName)
 {

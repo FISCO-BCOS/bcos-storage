@@ -49,7 +49,7 @@ std::shared_ptr<pingcap::kv::Cluster> newTiKVCluster(const std::vector<std::stri
 }
 }  // namespace bcos::storage
 
-void TiKVStorage::asyncGetPrimaryKeys(const std::string_view& _table,
+void TiKVStorage::asyncGetPrimaryKeys(std::string_view _table,
     const std::optional<Condition const>& _condition,
     std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) noexcept
 {
@@ -79,7 +79,7 @@ void TiKVStorage::asyncGetPrimaryKeys(const std::string_view& _table,
                             << LOG_KV("callback time(ms)", utcTime() - end);
 }
 
-void TiKVStorage::asyncGetRow(const std::string_view& _table, const std::string_view& _key,
+void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
     std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) noexcept
 {
     try
@@ -103,22 +103,10 @@ void TiKVStorage::asyncGetRow(const std::string_view& _table, const std::string_
             _callback(nullptr, {});
             return;
         }
-        TableInfo::ConstPtr tableInfo = getTableInfo(_table);
-        if (!tableInfo)
-        {
-            STORAGE_TIKV_LOG(ERROR) << LOG_DESC("asyncGetRow can't get tableInfo")
-                                    << LOG_KV("table", _table) << LOG_KV("key", _key);
-            _callback(BCOS_ERROR_UNIQUE_PTR(
-                          TableNotExists, "asyncGetRow failed because can't get TableInfo!"),
-                {});
-            return;
-        }
-        auto end2 = utcTime();
-        _callback(nullptr, decodeEntry(tableInfo, value));
+        _callback(nullptr, decodeEntry(value));
         STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
                                 << LOG_KV("key", _key) << LOG_KV("read time(ms)", end - start)
-                                << LOG_KV("tableInfo time(ms)", end2 - end)
-                                << LOG_KV("callback time(ms)", utcTime() - end2);
+                                << LOG_KV("callback time(ms)", utcTime() - end);
     }
     catch (const std::exception& e)
     {
@@ -126,7 +114,7 @@ void TiKVStorage::asyncGetRow(const std::string_view& _table, const std::string_
     }
 }
 
-void TiKVStorage::asyncGetRows(const std::string_view& _table,
+void TiKVStorage::asyncGetRows(std::string_view _table,
     const std::variant<const gsl::span<std::string_view const>, const gsl::span<std::string const>>&
         _keys,
     std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback) noexcept
@@ -144,17 +132,6 @@ void TiKVStorage::asyncGetRows(const std::string_view& _table,
         std::visit(
             [&](auto const& keys) {
                 std::vector<std::optional<Entry>> entries(keys.size());
-                TableInfo::ConstPtr tableInfo = getTableInfo(_table);
-                if (!tableInfo)
-                {
-                    STORAGE_TIKV_LOG(ERROR)
-                        << LOG_DESC("asyncGetRows failed table doesn't exist")
-                        << LOG_KV("table", _table) << LOG_KV("count", keys.size());
-                    _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists,
-                                  "asyncGetRows failed because can't get TableInfo!"),
-                        std::vector<std::optional<Entry>>());
-                    return;
-                }
 
                 std::vector<std::string> realKeys(keys.size());
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, keys.size()),
@@ -175,7 +152,7 @@ void TiKVStorage::asyncGetRows(const std::string_view& _table,
                             auto value = result[realKeys[i]];
                             if (!value.empty())
                             {
-                                entries[i] = decodeEntry(tableInfo, value);
+                                entries[i] = decodeEntry(value);
                             }
                         }
                     });
@@ -198,8 +175,8 @@ void TiKVStorage::asyncGetRows(const std::string_view& _table,
     }
 }
 
-void TiKVStorage::asyncSetRow(const std::string_view& _table, const std::string_view& _key,
-    Entry _entry, std::function<void(Error::UniquePtr)> _callback) noexcept
+void TiKVStorage::asyncSetRow(std::string_view _table, std::string_view _key, Entry _entry,
+    std::function<void(Error::UniquePtr)> _callback) noexcept
 {
     try
     {
@@ -235,8 +212,7 @@ void TiKVStorage::asyncSetRow(const std::string_view& _table, const std::string_
     }
 }
 
-void TiKVStorage::asyncPrepare(const TwoPCParams& param,
-    const TraverseStorageInterface::ConstPtr& storage,
+void TiKVStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorageInterface& storage,
     std::function<void(Error::Ptr, uint64_t startTS)> callback) noexcept
 {
     try
@@ -245,7 +221,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& param,
         std::unordered_map<std::string, std::string> mutations;
         tbb::spin_mutex writeMutex;
         atomic_bool isTableValid = true;
-        storage->parallelTraverse(true,
+        storage.parallelTraverse(true,
             [&](const std::string_view& table, const std::string_view& key, Entry const& entry) {
                 auto dbKey = toDBKey(table, key);
 
