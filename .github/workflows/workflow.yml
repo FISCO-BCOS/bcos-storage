@@ -69,7 +69,7 @@ jobs:
           source /Users/runner/.bash_profile
           tiup clean --all
           tiup playground v5.2.1 --mode tikv-slim &
-          sleep 10
+          sleep 60
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
   ubuntu20_04_build_with_gcc:
     name: build20_04_with_gcc
@@ -204,5 +204,5 @@ jobs:
           tiup update --self && tiup update playground
           tiup clean --all
           tiup playground v5.2.1 --mode tikv-slim &
-          sleep 10
+          sleep 60
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
