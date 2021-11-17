@@ -21,7 +21,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-latest, macos-11]
+        os: [macos-latest,]
     steps:
       - uses: actions/checkout@v2
         with:
@@ -52,7 +52,9 @@ jobs:
           source /Users/runner/.bash_profile
           tiup update --self && tiup update playground
           tiup clean --all
-        # tiup playground v5.2.1 --mode tikv-slim &
+          tiup install playground:v1.7.0
+          tiup install pd:v5.2.2
+        # tiup playground v5.2.2 --mode tikv-slim &
       - name: configure
         if: runner.os == 'macOS'
         run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DTESTS=ON -DUSE_TiKV=ON -DDISABLE_TIKV_TESTS=on
@@ -68,8 +70,8 @@ jobs:
         run: |
           source /Users/runner/.bash_profile
           tiup clean --all
-          tiup playground v5.2.1 --mode tikv-slim &
-          sleep 60
+          tiup playground v5.2.2 --mode tikv-slim &
+          sleep 10
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
   ubuntu20_04_build_with_gcc:
     name: build20_04_with_gcc
@@ -100,7 +102,9 @@ jobs:
           source /home/runner/.profile
           tiup update --self && tiup update playground
           tiup clean --all
-          tiup playground v5.2.1 --mode tikv-slim &
+          tiup install playground:v1.7.0
+          tiup install pd:v5.2.2
+          tiup playground v5.2.2 --mode tikv-slim &
       - name: configure
         run: cmake . -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON -DUSE_TiKV=ON #-DTOOLS=on
       - name: compile
@@ -138,7 +142,8 @@ jobs:
           source /home/runner/.profile
           tiup update --self && tiup update playground
           tiup clean --all
-          tiup playground v5.2.1 --mode tikv-slim &
+          tiup install playground:v1.7.0
+          tiup playground v5.2.2 --mode tikv-slim &
       - name: configure
         run: cmake . -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON -DUSE_TiKV=ON -DCOVERAGE=ON
       - name: compile
@@ -191,7 +196,7 @@ jobs:
       #     curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
       #     source /github/home/.profile
       #     tiup update --self && tiup update playground
-      #     tiup playground v5.2.1 --mode tikv-slim &
+      #     tiup playground v5.2.2 --mode tikv-slim &
       - name: configure and compile
         run: |
           source /opt/rh/devtoolset-7/enable
@@ -203,6 +208,8 @@ jobs:
           source /github/home/.profile
           tiup update --self && tiup update playground
           tiup clean --all
-          tiup playground v5.2.1 --mode tikv-slim &
-          sleep 60
+          tiup install playground:v1.7.0
+          tiup install pd:v5.2.2
+          tiup playground v5.2.2 --mode tikv-slim &
+          sleep 10
           CTEST_OUTPUT_ON_FAILURE=TRUE make test
