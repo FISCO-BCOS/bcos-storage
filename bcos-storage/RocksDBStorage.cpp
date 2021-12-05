@@ -91,7 +91,7 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
             return;
         }
         auto start = utcTime();
-        PinnableSlice value;
+        std::string value;
         auto dbKey = toDBKey(_table, _key);
 
         auto status = m_db->Get(
@@ -119,7 +119,7 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         auto end2 = utcTime();
 
         std::optional<Entry> entry((Entry()));
-        entry->set(std::move(*value.GetSelf()));
+        entry->set(std::move(value));
         _callback(nullptr, entry);
         STORAGE_ROCKSDB_LOG(TRACE)
             << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
@@ -178,7 +178,7 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
                             if (status.ok())
                             {
                                 entries[i] = std::make_optional(Entry());
-                                entries[i]->set(std::move(*value.GetSelf()));
+                                entries[i]->set(value.ToString());
                             }
                             else
                             {
