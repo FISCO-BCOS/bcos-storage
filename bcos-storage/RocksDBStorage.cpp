@@ -31,6 +31,7 @@
 #include <boost/algorithm/hex.hpp>
 #include <exception>
 #include <future>
+#include <optional>
 
 using namespace bcos::storage;
 using namespace rocksdb;
@@ -90,7 +91,7 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
             return;
         }
         auto start = utcTime();
-        PinnableSlice value;
+        std::string value;
         auto dbKey = toDBKey(_table, _key);
 
         auto status = m_db->Get(
@@ -116,7 +117,10 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         }
         auto end = utcTime();
         auto end2 = utcTime();
-        _callback(nullptr, decodeEntry(value.ToStringView()));
+
+        std::optional<Entry> entry((Entry()));
+        entry->set(std::move(value));
+        _callback(nullptr, entry);
         STORAGE_ROCKSDB_LOG(TRACE)
             << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
             << LOG_KV("key", boost::algorithm::hex_lower(std::string(_key)))
@@ -173,7 +177,8 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
 
                             if (status.ok())
                             {
-                                entries[i] = decodeEntry(value.ToStringView());
+                                entries[i] = std::make_optional(Entry());
+                                entries[i]->set(value.ToString());
                             }
                             else
                             {
@@ -237,8 +242,7 @@ void RocksDBStorage::asyncSetRow(std::string_view _table, std::string_view _key,
             STORAGE_ROCKSDB_LOG(TRACE)
                 << LOG_DESC("asyncSetRow") << LOG_KV("table", _table)
                 << LOG_KV("key", boost::algorithm::hex_lower(std::string(_key)));
-            std::string value = encodeEntry(_entry);
-            status = m_db->Put(options, dbKey, value);
+            status = m_db->Put(options, dbKey, _entry.get());
         }
 
         if (!status.ok())
@@ -291,9 +295,8 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                 }
                 else
                 {
-                    std::string value = encodeEntry(entry);
                     tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
-                    auto status = m_writeBatch->Put(dbKey, value);
+                    auto status = m_writeBatch->Put(dbKey, entry.get());
                 }
                 return true;
             });
