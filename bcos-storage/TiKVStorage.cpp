@@ -200,7 +200,7 @@ void TiKVStorage::asyncSetRow(std::string_view _table, std::string_view _key, En
         {
             STORAGE_TIKV_LOG(DEBUG)
                 << LOG_DESC("asyncSetRow") << LOG_KV("table", _table) << LOG_KV("key", _key);
-            std::string value = encodeEntry(_entry);
+            std::string value = std::string(_entry.get());
             txn.set(dbKey, value);
         }
         txn.commit();
@@ -232,7 +232,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorageIn
                 }
                 else
                 {
-                    std::string value = encodeEntry(entry);
+                    std::string value = std::string(entry.get());
                     tbb::spin_mutex::scoped_lock lock(writeMutex);
                     mutations[dbKey] = std::move(value);
                 }
