@@ -129,13 +129,12 @@ int main(int argc, const char* argv[])
                 row = std::move(entry);
             });
 
-            for (auto it : *row)
-            {
-                std::string hex;
-                hex.reserve(it.size() * 2);
-                boost::algorithm::hex_lower(it.begin(), it.end(), std::back_inserter(hex));
-                cout << " [" << hex << "] ";
-            }
+            auto view = row->get();
+            std::string hexData;
+            hexData.reserve(view.size() * 2);
+            boost::algorithm::hex_lower(view.begin(), view.end(), std::back_inserter(hexData));
+            cout << " [" << hex << "] ";
+
             cout << " [status=" << row->status() << "]";
             //  << " [num=" << row->num() << "]";
             cout << endl;
@@ -153,13 +152,12 @@ int main(int argc, const char* argv[])
         row = std::move(entry);
     });
 
-    for (auto it : *row)
-    {
-        std::string hex;
-        hex.reserve(it.size() * 2);
-        boost::algorithm::hex_lower(it.begin(), it.end(), std::back_inserter(hex));
-        cout << "[" << hex << "]";
-    }
+    auto view = row->get();
+    std::string hexData;
+    hexData.reserve(view.size() * 2);
+    boost::algorithm::hex_lower(view.begin(), view.end(), std::back_inserter(hexData));
+    cout << " [" << hex << "] ";
+
     cout << " [status=" << row->status() << "]";
     return 0;
 }

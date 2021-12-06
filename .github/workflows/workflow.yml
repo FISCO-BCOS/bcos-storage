@@ -57,7 +57,7 @@ jobs:
         # tiup playground v5.2.2 --mode tikv-slim &
       - name: configure
         if: runner.os == 'macOS'
-        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DTESTS=ON -DUSE_TiKV=ON -DDISABLE_TIKV_TESTS=on
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DTESTS=ON -DUSE_TiKV=OFF -DDISABLE_TIKV_TESTS=on
       - name: configure
         if: runner.os == 'Linux'
         run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DTESTS=ON -DUSE_TiKV=ON
@@ -106,7 +106,7 @@ jobs:
           tiup install pd:v5.2.2
           tiup playground v5.2.2 --mode tikv-slim &
       - name: configure
-        run: cmake . -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON -DUSE_TiKV=ON #-DTOOLS=on
+        run: cmake . -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON -DUSE_TiKV=OFF #-DTOOLS=on
       - name: compile
         run: make -j2
       - name: run test
@@ -145,7 +145,7 @@ jobs:
           tiup install playground:v1.7.0
           tiup playground v5.2.2 --mode tikv-slim &
       - name: configure
-        run: cmake . -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON -DUSE_TiKV=ON -DCOVERAGE=ON
+        run: cmake . -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON -DUSE_TiKV=OFF -DCOVERAGE=ON
       - name: compile
         run: make -j2
       - name: run test
@@ -201,7 +201,7 @@ jobs:
         run: |
           source /opt/rh/devtoolset-7/enable
           mkdir -p build && cd build
-          cmake3 .. -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON -DUSE_TiKV=ON
+          cmake3 .. -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON -DUSE_TiKV=OFF
           make -j2
           mkdir -p /root/.tiup/bin/
           curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh

@@ -33,34 +33,4 @@ using namespace std;
 
 namespace bcos::storage
 {
-std::string encodeEntry(const Entry& entry)
-{
-    std::string value;
-    boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
-    boost::archive::binary_oarchive archive(outputStream,
-        boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
-
-    EntrySaveWrapper wrapper(entry);
-    archive << wrapper;
-
-    outputStream.flush();
-
-    return value;
-}
-
-std::optional<Entry> decodeEntry(const std::string_view& buffer)
-{
-    auto entry = std::make_optional<Entry>();
-
-    boost::iostreams::stream<boost::iostreams::array_source> inputStream(
-        buffer.data(), buffer.size());
-    boost::archive::binary_iarchive archive(inputStream,
-        boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking);
-
-    EntryLoadWrapper wrapper(*entry);
-    archive >> wrapper;
-
-    return entry;
-}
-
 }  // namespace bcos::storage

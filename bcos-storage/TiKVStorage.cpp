@@ -103,7 +103,10 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
             _callback(nullptr, {});
             return;
         }
-        _callback(nullptr, decodeEntry(value));
+
+        auto entry = std::make_optional<Entry>();
+        entry->set(value);
+        _callback(nullptr, std::move(entry));
         STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
                                 << LOG_KV("key", _key) << LOG_KV("read time(ms)", end - start)
                                 << LOG_KV("callback time(ms)", utcTime() - end);
@@ -152,7 +155,8 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
                             auto value = result[realKeys[i]];
                             if (!value.empty())
                             {
-                                entries[i] = decodeEntry(value);
+                                entries[i].emplace(Entry());
+                                entries[i]->set(value);
                             }
                         }
                     });
@@ -200,7 +204,7 @@ void TiKVStorage::asyncSetRow(std::string_view _table, std::string_view _key, En
         {
             STORAGE_TIKV_LOG(DEBUG)
                 << LOG_DESC("asyncSetRow") << LOG_KV("table", _table) << LOG_KV("key", _key);
-            std::string value = encodeEntry(_entry);
+            std::string value = std::string(_entry.get());
             txn.set(dbKey, value);
         }
         txn.commit();
@@ -232,7 +236,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorageIn
                 }
                 else
                 {
-                    std::string value = encodeEntry(entry);
+                    std::string value = std::string(entry.get());
                     tbb::spin_mutex::scoped_lock lock(writeMutex);
                     mutations[dbKey] = std::move(value);
                 }
