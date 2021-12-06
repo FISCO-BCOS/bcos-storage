@@ -132,7 +132,7 @@ struct TestTiKVStorageFixture
                         BOOST_CHECK_EQUAL(entries.size(), tableEntries);
                         for (size_t i = 0; i < tableEntries; ++i)
                         {
-                            BOOST_CHECK_EQUAL(entries[i]->getField(3), std::string("value3"));
+                            BOOST_CHECK_EQUAL(entries[i]->getField(0), std::string("value3"));
                         }
                     });
             });
@@ -465,7 +465,7 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
 
                     for (size_t i = 0; i < 10; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(2),
+                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
                             std::string("hello world!") + table2Keys[i][3]);
                     }
                 });
@@ -599,7 +599,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
 
                     for (size_t i = 0; i < tableEntries; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(2),
+                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
                             std::string("hello world!") + table2Keys[i].substr(3));
                     }
                 });
@@ -926,7 +926,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
 
                     for (size_t i = 0; i < tableEntries; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(2),
+                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
                             std::string("hello world!") + table2Keys[i].substr(3));
                     }
                 });
@@ -942,7 +942,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
                     BOOST_CHECK_EQUAL(entries.size(), total);
                     for (size_t i = 0; i < total; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(3), std::string("value3"));
+                        BOOST_CHECK_EQUAL(entries[i]->getField(0), std::string("value3"));
                     }
                 });
         });
@@ -1122,7 +1122,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
 
                     for (size_t i = 0; i < tableEntries; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(2),
+                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
                             std::string("hello world!") + table2Keys[i].substr(3));
                     }
                 });
@@ -1138,7 +1138,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
                     BOOST_CHECK_EQUAL(entries.size(), total);
                     for (size_t i = 0; i < total; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(3), std::string("value3"));
+                        BOOST_CHECK_EQUAL(entries[i]->getField(0), std::string("value3"));
                     }
                 });
         });
