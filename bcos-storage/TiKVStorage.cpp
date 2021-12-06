@@ -103,7 +103,10 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
             _callback(nullptr, {});
             return;
         }
-        _callback(nullptr, decodeEntry(value));
+
+        auto entry = std::make_optional<Entry>();
+        entry->set(value);
+        _callback(nullptr, std::move(entry));
         STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
                                 << LOG_KV("key", _key) << LOG_KV("read time(ms)", end - start)
                                 << LOG_KV("callback time(ms)", utcTime() - end);
