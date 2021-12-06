@@ -152,7 +152,8 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
                             auto value = result[realKeys[i]];
                             if (!value.empty())
                             {
-                                entries[i] = decodeEntry(value);
+                                entries[i].emplace(Entry());
+                                entries[i]->set(value);
                             }
                         }
                     });
