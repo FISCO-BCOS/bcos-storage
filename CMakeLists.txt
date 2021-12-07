@@ -12,7 +12,7 @@ FetchContent_Declare(bcos-cmake-scripts
     PREFIX ${CMAKE_SOURCE_DIR}/cmake/deps
     DOWNLOAD_NO_PROGRESS 1
     GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/bcos-cmake-scripts.git
-    GIT_TAG 2d25e8957323ffa86a55528c22348088ba99e9c6
+    GIT_TAG 9b2ac5b979cbc97f640b2285feb2c74a18cfb935
     SOURCE_DIR ${BCOS_CMAKE_SCRIPTS_DIR}
     LOG_CONFIGURE 1
     LOG_DOWNLOAD 1
@@ -34,8 +34,8 @@ set(HUNTER_CONFIGURATION_TYPES Release CACHE STRING "Build type of Hunter packag
 
 include(HunterGate)
 HunterGate(
-    URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/1030fc0469cc8d974b3a3d020ab2fd59df006edb.tar.gz"
-    SHA1 "1bf2dc0631119c6304a9bac7445f1e77914c0fb7"
+    URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/203039fdd0826330facd9c3841082dbf35d0c808.tar.gz"
+    SHA1 "26ca1840eb26da410913469f2f278569c8d383ae"
     FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.cmake"
 )
 
@@ -46,6 +46,7 @@ cmake_policy(SET CMP0079 NEW)
 cmake_policy(SET CMP0063 NEW)
 
 project(bcos-storage VERSION "3.0.0")
+set(VERSION_SUFFIX "-rc1")
 
 # basic setting
 include(Options)
