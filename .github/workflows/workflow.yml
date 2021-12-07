@@ -1,0 +1,215 @@
+name: bcos-storage GitHub Actions
+on:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  release:
+    types: [published, created, edited]
+env:
+  CCACHE_DIR: ${{ github.workspace }}/ccache
+
+jobs:
+  build_with_clang:
+    name: build_with_clang
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest,]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+      - name: Nightly default
+        run: rustup default nightly
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: |
+            /home/runner/.hunter
+            /Users/runner/.hunter/
+            ccache
+          key: hunter-clang-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            hunter-clang-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-clang-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-clang-v2-notest-${{ runner.temp }}-
+      - name: install macOS dependencies
+        if: runner.os == 'macOS'
+        run: brew install ccache
+      - name: install Ubuntu dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt install -y git curl build-essential clang cmake ccache libzstd-dev autoconf automake libtool shtool
+      - name: prepare TiKV
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /Users/runner/.bash_profile
+          tiup update --self && tiup update playground
+          tiup clean --all
+          tiup install playground:v1.7.0
+          tiup install pd:v5.2.2
+        # tiup playground v5.2.2 --mode tikv-slim &
+      - name: configure
+        if: runner.os == 'macOS'
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DTESTS=ON -DUSE_TiKV=OFF -DDISABLE_TIKV_TESTS=on
+      - name: configure
+        if: runner.os == 'Linux'
+        run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DTESTS=ON -DUSE_TiKV=ON
+      - name: check commit
+        if: ${{ runner.os == 'Linux' && github.base_ref != 'master' && github.event_name == 'pull_request' }}
+        run: bash cmake/scripts/shell/check-commit.sh 3000 "https://api.github.com/repos/FISCO-BCOS/bcos-storage"
+      - name: compile
+        run: make -j2
+      - name: run test
+        run: |
+          source /Users/runner/.bash_profile
+          tiup clean --all
+          tiup playground v5.2.2 --mode tikv-slim &
+          sleep 10
+          CTEST_OUTPUT_ON_FAILURE=TRUE make test
+  ubuntu20_04_build_with_gcc:
+    name: build20_04_with_gcc
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: |
+            /home/runner/.hunter
+            ccache
+          key: hunter-gcc-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            hunter-gcc-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-gcc-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-gcc-v2-notest-${{ runner.temp }}-
+      - name: install Ubuntu dependencies
+        run: sudo apt install -y git curl build-essential cmake ccache libzstd-dev autoconf libtool pkg-config
+      - name: prepare TiKV
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /home/runner/.profile
+          tiup update --self && tiup update playground
+          tiup clean --all
+          tiup install playground:v1.7.0
+          tiup install pd:v5.2.2
+          tiup playground v5.2.2 --mode tikv-slim &
+      - name: configure
+        run: cmake . -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON -DUSE_TiKV=OFF #-DTOOLS=on
+      - name: compile
+        run: make -j2
+      - name: run test
+        run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
+  ubuntu18_04_build_with_gcc:
+    name: ubuntu18_04_build_with_gcc
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-18.04]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+      - name: Nightly default
+        run: rustup default nightly
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: |
+            /home/runner/.hunter
+            ccache
+          key: hunter-ubuntu-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            hunter-ubuntu-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-ubuntu-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-ubuntu-v2-notest-${{ runner.temp }}-
+      - name: install Ubuntu dependencies
+        run: sudo apt install -y git curl build-essential cmake ccache lcov libzstd-dev autoconf libtool pkg-config
+      - name: prepare TiKV
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /home/runner/.profile
+          tiup update --self && tiup update playground
+          tiup clean --all
+          tiup install playground:v1.7.0
+          tiup playground v5.2.2 --mode tikv-slim &
+      - name: configure
+        run: cmake . -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON -DUSE_TiKV=OFF -DCOVERAGE=ON
+      - name: compile
+        run: make -j2
+      - name: run test
+        run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      - name: generate coverage
+        run: make coverage
+      - name: upload code coverage to Codecov
+        uses: codecov/codecov-action@v1
+        with:
+          file: ./coverage.info
+          name: code coverage
+          fail_ci_if_error: true
+  build_centos_with_gcc:
+    name: build_centos_with_gcc
+    runs-on: ubuntu-latest
+    container:
+      image: docker.io/centos:7
+      volumes:
+        - /github/home/.hunter:/github/home/.hunter
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-06-17
+          override: true
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: |
+            /home/runner/.hunter
+            /github/home/.hunter
+            ccache
+          key: hunter-centos-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            hunter-centos-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-centos-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-centos-v3-notest-${{ runner.temp }}-
+      - name: install CentOS dependencies
+        run: |
+          yum install -y epel-release centos-release-scl
+          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache devtoolset-7 libzstd-devel python-devel python3-devel && source /opt/rh/devtoolset-7/enable
+      # - name: prepare TiKV
+      #   run: |
+      #     mkdir -p /root/.tiup/bin/
+      #     curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+      #     source /github/home/.profile
+      #     tiup update --self && tiup update playground
+      #     tiup playground v5.2.2 --mode tikv-slim &
+      - name: configure and compile
+        run: |
+          source /opt/rh/devtoolset-7/enable
+          mkdir -p build && cd build
+          cmake3 .. -DHUNTER_STATUS_DEBUG=ON -DHUNTER_PACKAGE_LOG_BUILD=OFF -DTESTS=ON -DUSE_TiKV=OFF
+          make -j2
+          mkdir -p /root/.tiup/bin/
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /github/home/.profile
+          tiup update --self && tiup update playground
+          tiup clean --all
+          tiup install playground:v1.7.0
+          tiup install pd:v5.2.2
+          tiup playground v5.2.2 --mode tikv-slim &
+          sleep 10
+          CTEST_OUTPUT_ON_FAILURE=TRUE make test
